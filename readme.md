@@ -26,13 +26,8 @@ sbt "custom-rules / publishLocal"
 3. Add the dependency and semanticdb support to your `build.sbt` file:
 
 ```scala
-inThisBuild(
-  List(
-    scalaVersion := "3.7.2",
-    semanticdbEnabled := true,
-    semanticdbVersion := scalafixSemanticdb.revision
-  )
-)
+semanticdbEnabled := true
+semanticdbVersion := scalafixSemanticdb.revision
 
 scalafixDependencies += "ch.epfl.sidoniebouthors" % "custom-rules_3" % "0.1.0-SNAPSHOT"
 ```

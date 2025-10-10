@@ -21,9 +21,9 @@ sbt "custom-rules / publishLocal"
 1. Publish the rule locally using the command above.
 2. Add sbt-scalafix to your `project/plugins.sbt` file:
 
-  ```scala
-  addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.4")
-  ```
+```scala
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.4")
+```
 
 3. Add the dependency and semanticdb support to your `build.sbt` file:
 
@@ -80,3 +80,16 @@ with scalafix. This means it may be a good idea to remove `-Xfatal-warnings` or 
 from the scaffold project.
 
 See the configuration options at the top of the script.
+
+## Specs for Parsed Rules
+
+Will be updated as I add more features.
+
+The rules are simply written in Scala 3 with some additional syntax for pattern matching.
+Patterns are surrounded by `?{...}`. Everything inside the braces will be matched according to pattern rules and not literally.
+
+| Syntax   | Name        | Description                                           |
+| -------- | ----------- | ----------------------------------------------------- |
+| `_`      | Wildcard    | matches anything                                      |
+| `a \| b` | Alternative | matches either pattern a or pattern b                 |
+| `+a`     | Escape      | `a` will be matched literaly rather than as a pattern |

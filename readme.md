@@ -5,7 +5,7 @@
 ### Run Tests
 
 ```bash
-sbt tests / test
+sbt "tests / test"
 ```
 
 ### Publish Locally

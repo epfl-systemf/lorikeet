@@ -75,5 +75,8 @@ configured to use the custom rules as described above.
 The script will replace the `assignment.scala` file in the scaffold project with the ones from the submission, then compile and run scalafix check on it, collecting the results in a logs file.
 
 Note that this script does not rewrite the submission files, it only checks them.
+Additionaly, submissions that do not compile will be reported as such but will not be checked
+with scalafix. This means it may be a good idea to remove `-Xfatal-warnings` or other such flags
+from the scaffold project.
 
 See the configuration options at the top of the script.

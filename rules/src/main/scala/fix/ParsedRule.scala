@@ -5,10 +5,10 @@ import scala.meta._
 import scala.meta.dialects.Scala3
 import scala.collection.mutable.ListBuffer
 
-val rule: String = """if ?{_} then ?{_} else ?{true | false}""" 
+val rule: String = """if ?{_} then ?{_} else ?{+true | +false}"""
 
 case class LintMessage(t: Tree) extends Diagnostic {
-  override def position: Position = t.pos 
+  override def position: Position = t.pos
   override def message: String =
     s"Instance of parsed rule '$rule' found at : \n${t.syntax}"
 }
@@ -32,13 +32,13 @@ class ParsedRule extends SemanticRule("ParsedRule"):
   def compareTrees(pattern: Tree, candidate: Tree): Boolean =
     pattern match
       // Special handling for particular constructs
-      case t @ Term.Apply(Term.Name("?"), List(Term.Block(List(arg)))) =>
-        compareSpecialCases(arg, candidate)
+      case Term.Apply(Term.Name("?"), List(Term.Block(List(arg)))) =>
+        matchWithPattern(arg, candidate)
       case Term.AnonymousFunction(
             Term.Apply(Term.Name("?"), List(Term.Block(List(arg))))
           ) =>
-        compareSpecialCases(arg, candidate)
-      case _: Lit                    => pattern.structure == candidate.structure
+        matchWithPattern(arg, candidate)
+      case _: Lit => pattern.structure == candidate.structure
       case _ if pattern == candidate =>
         true
       case _ =>
@@ -51,14 +51,19 @@ class ParsedRule extends SemanticRule("ParsedRule"):
           result
         else false
 
-  def compareSpecialCases(specialPat: Tree, candidate: Tree): Boolean =
-    specialPat match
+  def matchWithPattern(pat: Tree, candidate: Tree): Boolean =
+    pat match
+      case Term.ApplyUnary(Term.Name("+"), arg) =>
+        compareTrees(arg, candidate)
       case Term.ApplyInfix(a, Term.Name("|"), Nil, List(b: Tree)) =>
-        val acheck = compareTrees(a, candidate)
-        val bcheck = compareTrees(b, candidate)
+        val acheck = matchWithPattern(a, candidate)
+        val bcheck = matchWithPattern(b, candidate)
         acheck || bcheck
       case Term.Placeholder() => true
-      case _ => compareTrees(specialPat, candidate)
+      case Term.AnonymousFunction(f) =>
+        matchWithPattern(f, candidate)
+      case _ =>
+        throw new Exception(s"Unsupported pattern: ${pat.syntax}")
 
   def collectTopLevelMatches[A](
       tree: Tree,

@@ -14,6 +14,8 @@ sbt "tests / test"
 sbt "custom-rules / publishLocal"
 ```
 
+## Usage
+
 ### Using a Local Rule
 
 1. Publish the rule locally using the command above.
@@ -46,3 +48,32 @@ rules = [
 sbt scalafix
 ```
 
+### Running a Check on Student Submissions
+
+See script [check.sh](scripts/check.sh).
+
+This script expects a submission directory with the following structure:
+
+```
+submission/
+├── SCIPER
+│   └── 0
+│       └── assignment.scala
+|   └── 1
+│       └── assignment.scala
+|   └── ...
+├── SCIPER
+│   └── 0
+│       └── assignment.scala
+|   └── ...
+└── ...
+```
+
+The script also expects a `scaffold` directory containing the lab sbt project that has been
+configured to use the custom rules as described above.
+
+The script will replace the `assignment.scala` file in the scaffold project with the ones from the submission, then compile and run scalafix check on it, collecting the results in a logs file.
+
+Note that this script does not rewrite the submission files, it only checks them.
+
+See the configuration options at the top of the script.

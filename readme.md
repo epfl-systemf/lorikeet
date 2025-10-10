@@ -1,3 +1,15 @@
 # Code Quality Feedback Tool
 
-Sidonie Bouthors
+## Development
+
+### Run Tests
+
+```bash
+sbt tests / test
+```
+
+### Publish Locally
+
+```bash
+sbt "custom-rules / publishLocal"
+```

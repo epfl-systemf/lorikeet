@@ -24,7 +24,7 @@ inThisBuild(
   )
 )
 
-lazy val `basic-rule` = (project in file("."))
+lazy val `custom-rules` = (project in file("."))
   .aggregate(
     rules.projectRefs ++
       input.projectRefs ++
@@ -37,7 +37,7 @@ lazy val `basic-rule` = (project in file("."))
 
 lazy val rules = projectMatrix
   .settings(
-    moduleName := "basic-rule2",
+    moduleName := "custom-rules",
     libraryDependencies += ("ch.epfl.scala" %% "scalafix-core" % "0.14.3")
       .cross(CrossVersion.for3Use2_13)
   )

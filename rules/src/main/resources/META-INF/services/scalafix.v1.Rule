@@ -1,3 +1,4 @@
 fix.BasicIfRule
 fix.SimplIfRule
 fix.UselessHelperRule
+fix.ParsedRule

@@ -1,2 +1,3 @@
 fix.BasicIfRule
 fix.SimplIfRule
+fix.UselessHelperRule

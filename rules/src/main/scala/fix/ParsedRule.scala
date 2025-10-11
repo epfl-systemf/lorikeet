@@ -5,25 +5,34 @@ import scala.meta._
 import scala.meta.dialects.Scala3
 import scala.collection.mutable.ListBuffer
 
-val rule: String = """if ?{_} then ?{_} else ?{+true | +false}"""
+val rules: List[String] =
+  List(
+    """(?{_}).+(?{_})""",
+    """(?{_}).-(?{_})""",
+    """(?{_}).*(?{_})""",
+    """(?{_})./(?{_})"""
+  )
 
-case class LintMessage(t: Tree) extends Diagnostic {
+case class LintMessage(t: Tree, r: String) extends Diagnostic {
   override def position: Position = t.pos
   override def message: String =
-    s"Instance of parsed rule '$rule' found at : \n${t.syntax}"
+    s"Instance of parsed rule '$r' found at : \n${t.syntax}"
 }
 
 class ParsedRule extends SemanticRule("ParsedRule"):
   override def fix(implicit doc: SemanticDocument): Patch =
 
-    // Parse rule
-    val ruleTree = rule.parse[Stat].get
+    // Parse rules
+    val ruleTrees = rules.map(_.parse[Stat].get)
 
     val result = collectTopLevelMatches(
       doc.tree,
-      {
-        case t if compareTrees(ruleTree, t) =>
-          Patch.lint(LintMessage(t))
+      { case t =>
+        ruleTrees.find(compareTrees(_, t)) match
+          case Some(r) =>
+            Patch.lint(LintMessage(t, r.syntax))
+          case None =>
+            Patch.empty
       }
     )
 
@@ -38,18 +47,36 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Term.Apply(Term.Name("?"), List(Term.Block(List(arg))))
           ) =>
         matchWithPattern(arg, candidate)
-      case _: Lit => pattern.structure == candidate.structure
-      case _ if pattern == candidate =>
-        true
       case _ =>
-        val prodPref = pattern.productPrefix == candidate.productPrefix
-        if (prodPref) then
-          val childrenCheck = pattern.children.zip(candidate.children).map {
-            case (pChild, cChild) => compareTrees(pChild, cChild)
-          }
-          val result = prodPref && childrenCheck.forall(identity)
-          result
+        val prodStruc =
+          pattern.productPrefix == candidate.productPrefix &&
+            pattern.productArity == candidate.productArity
+        if (prodStruc) then
+          val fieldsCheck = pattern.productIterator
+            .zip(candidate.productIterator)
+            .forall({ case (p, c) => compareFields(p, c) })
+          if !fieldsCheck then
+            println(
+              s"Not Matched Syntax: ${pattern.syntax} with ${candidate.syntax}"
+            )
+            println(
+              s"Not Matched: ${pattern.structure} with ${candidate.structure}"
+            )
+          fieldsCheck
         else false
+
+  def compareFields(pat: Any, cand: Any): Boolean =
+    (pat, cand) match
+      // Trees
+      case (p: Tree, c: Tree) => compareTrees(p, c)
+      // Iterables
+      case (p: Iterable[_], c: Iterable[_]) =>
+        if p.size == c.size then
+          val checks = p.zip(c).map { case (pp, cp) => compareFields(pp, cp) }
+          checks.forall(identity)
+        else false
+      // Other fields
+      case _ => pat == cand
 
   def matchWithPattern(pat: Tree, candidate: Tree): Boolean =
     pat match
@@ -65,17 +92,15 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
 
-  def collectTopLevelMatches[A](
+  def collectTopLevelMatches(
       tree: Tree,
-      f: PartialFunction[Tree, A]
-  ): List[A] = {
-    val buf = ListBuffer.empty[A]
+      f: Tree => Patch
+  ): List[Patch] = {
+    val buf = ListBuffer.empty[Patch]
     def visit(t: Tree): Unit = {
-      if (f.isDefinedAt(t)) {
-        buf += f(t) // don’t recurse into children
-      } else {
-        t.children.foreach(visit)
-      }
+      f(t) match
+        case p if !p.isEmpty => buf += p // don't recurse into children
+        case _               => t.children.foreach(visit)
     }
     visit(tree)
     buf.toList

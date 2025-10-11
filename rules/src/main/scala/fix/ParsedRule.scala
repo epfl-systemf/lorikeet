@@ -51,19 +51,10 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         val prodStruc =
           pattern.productPrefix == candidate.productPrefix &&
             pattern.productArity == candidate.productArity
-        if (prodStruc) then
-          val fieldsCheck = pattern.productIterator
-            .zip(candidate.productIterator)
-            .forall({ case (p, c) => compareFields(p, c) })
-          if !fieldsCheck then
-            println(
-              s"Not Matched Syntax: ${pattern.syntax} with ${candidate.syntax}"
-            )
-            println(
-              s"Not Matched: ${pattern.structure} with ${candidate.structure}"
-            )
-          fieldsCheck
-        else false
+        prodStruc &&
+        pattern.productIterator
+          .zip(candidate.productIterator)
+          .forall({ case (p, c) => compareFields(p, c) })
 
   def compareFields(pat: Any, cand: Any): Boolean =
     (pat, cand) match

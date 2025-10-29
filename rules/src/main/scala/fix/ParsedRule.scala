@@ -5,6 +5,20 @@ import scala.meta._
 import scala.meta.dialects.Scala3
 import scala.collection.mutable.ListBuffer
 import scala.io.Source._
+import upickle.default._
+import scala.util.{Try, Success, Failure}
+
+case class RuleConfig(
+    name: String,
+    pattern: String,
+    rewrite: Option[String]
+) derives ReadWriter
+
+case class Rule(
+    name: String,
+    pattern: Tree,
+    rewrite: Option[Tree]
+)
 
 case class LintMessage(t: Tree, r: String) extends Diagnostic {
   override def position: Position = t.pos
@@ -17,38 +31,60 @@ class ParsedRule extends SemanticRule("ParsedRule"):
   type Bindings = Map[String, Tree]
   type MatchResult = Option[Bindings]
 
+  def parseRulesConfig(): List[Rule] =
+    val configFile = sys.env.get("RULES_CONF") match
+      case None           => ".rules.json"
+      case Some(filename) => filename
+
+    val rules: List[RuleConfig] = Try {
+      read[List[RuleConfig]](fromFile(configFile).mkString)
+    } match
+      case Success(r) => r
+      case Failure(e) =>
+        throw new Exception(
+          s"Could not read rules from configuration file: $configFile. " +
+            s"Error: ${e.getMessage}"
+        )
+
+    val ruleTrees: List[Rule] = rules.map { rule =>
+      val matchTree = rule.pattern.parse[Stat] match
+        case Parsed.Success(t) => t
+        case Parsed.Error(_, msg, _) =>
+          throw new Exception(
+            s"Could not parse match pattern for rule '${rule.name}': $msg"
+          )
+      val rewriteTree = rule.rewrite match
+        case Some(rp) =>
+          rp.parse[Stat] match
+            case Parsed.Success(t) => Some(t)
+            case Parsed.Error(_, msg, _) =>
+              throw new Exception(
+                s"Could not parse rewrite pattern for rule '${rule.name}': $msg"
+              )
+        case None => None
+      Rule(rule.name, matchTree, rewriteTree)
+    }
+
+    ruleTrees
+
   override def fix(implicit doc: SemanticDocument): Patch =
 
-    val matchFile = sys.env.get("MATCH_RULE_CONF") match
-      case None           => ".matchrule.conf"
-      case Some(filename) => filename
-    val rewriteFile = sys.env.get("REWRITE_RULE_CONF") match
-      case None           => ".rewriterule.conf"
-      case Some(filename) => filename
-
-    val matchRules = fromFile(matchFile).getLines.toList
-    val rewriteRules = fromFile(rewriteFile).getLines.toList
-
-    // Parse rules
-    val matchRuleTrees = matchRules.map(_.parse[Stat].get)
-    val rewriteRuleTrees = rewriteRules.map(_.parse[Stat].get)
-
-    // Warn if number of match and rewrite rules differ
-    if matchRuleTrees.size != rewriteRuleTrees.size then
-      println(
-        s"Warning: Number of match rules (${matchRuleTrees.size}) " +
-          s"does not match number of rewrite rules (${rewriteRuleTrees.size})."
-      )
-    val ruleTrees = matchRuleTrees.zip(rewriteRuleTrees)
+    val ruleTrees = parseRulesConfig()
 
     val result = collectTopLevelMatches(
       doc.tree,
       { case t =>
         ruleTrees
-          .flatMap { case (m, r) =>
-            compareTrees(m, t, Map.empty[String, Tree]).map { bindings =>
-              val rewrittenTree = applyBindings(r, bindings)
-              Patch.replaceTree(t, rewrittenTree.syntax)
+          .flatMap { case Rule(n, p, r) =>
+            compareTrees(p, t, Map.empty[String, Tree]).map { bindings =>
+              r match
+                case None =>
+                  // Lint only
+                  Patch.lint(LintMessage(t, n))
+                case Some(r) =>
+                  // Rewrite
+                  val rewrittenTree = applyBindings(r, bindings)
+                  Patch.replaceTree(t, rewrittenTree.syntax)
             }
           }
           .headOption

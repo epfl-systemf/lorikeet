@@ -2,6 +2,7 @@ lazy val V = _root_.scalafix.sbt.BuildInfo
 
 // lazy val rulesCrossVersions = Seq(V.scala213, V.scala212)
 lazy val scala3Version = "3.7.0"
+val upickleVersion = "4.4.0"
 
 inThisBuild(
   List(
@@ -39,7 +40,8 @@ lazy val rules = projectMatrix
   .settings(
     moduleName := "custom-rules",
     libraryDependencies += ("ch.epfl.scala" %% "scalafix-core" % "0.14.3")
-      .cross(CrossVersion.for3Use2_13)
+      .cross(CrossVersion.for3Use2_13),
+    libraryDependencies += "com.lihaoyi" %% "upickle" % upickleVersion
   )
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = Seq(scala3Version))

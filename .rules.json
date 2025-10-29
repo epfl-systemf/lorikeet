@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Infix +",
+    "pattern": "(?{x -> _}).+(?{y -> _})",
+    "rewrite": "?{x} + ?{y}"
+  },
+  {
+    "name": "Infix -",
+    "pattern": "(?{x -> _}).-(?{y -> _})",
+    "rewrite": "?{x} - ?{y}"
+  },
+  {
+    "name": "Infix *",
+    "pattern": "(?{x -> _}).*(?{y -> _})",
+    "rewrite": "?{x} * ?{y}"
+  },
+  {
+    "name": "infix /",
+    "pattern": "(?{x -> _})./(?{y -> _})",
+    "rewrite": "?{x} / ?{y}"
+  }
+]

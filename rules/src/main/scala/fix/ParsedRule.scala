@@ -5,15 +5,17 @@ import scala.meta._
 import scala.meta.dialects.Scala3
 import scala.collection.mutable.ListBuffer
 import scala.io.Source._
-import upickle.default._
 import scala.util.{Try, Success, Failure}
+import pureconfig._
+import pureconfig.generic.derivation.default._
+import pureconfig.error.ConfigReaderFailures
 
 case class RuleConfig(
     name: String,
     pattern: String,
     rewrite: Option[String]
-) derives ReadWriter
-
+) derives ConfigReader
+case class RulesConfig(rules: List[RuleConfig]) derives ConfigReader
 case class Rule(
     name: String,
     pattern: Tree,
@@ -50,17 +52,18 @@ class ParsedRule extends SemanticRule("ParsedRule"):
 
   def parseRulesConfig(): List[Rule] =
     val configFile = sys.env.get("RULES_CONF") match
-      case None           => ".rules.json"
+      case None           => ".rules.conf"
       case Some(filename) => filename
 
-    val rules: List[RuleConfig] = Try {
-      read[List[RuleConfig]](fromFile(configFile).mkString)
-    } match
-      case Success(r) => r
-      case Failure(e) =>
+    val configResults: Either[ConfigReaderFailures, RulesConfig] =
+      ConfigSource.file(configFile).load[RulesConfig]
+
+    val rules: List[RuleConfig] = configResults match
+      case Right(r) => r.rules
+      case Left(e) =>
         throw new Exception(
           s"Could not read rules from configuration file: $configFile. " +
-            s"Error: ${e.getMessage}"
+            s"Error: ${e.prettyPrint()}"
         )
 
     val ruleTrees: List[Rule] = rules.map { rule =>

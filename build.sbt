@@ -41,7 +41,9 @@ lazy val rules = projectMatrix
     moduleName := "custom-rules",
     libraryDependencies += ("ch.epfl.scala" %% "scalafix-core" % "0.14.3")
       .cross(CrossVersion.for3Use2_13),
-    libraryDependencies += "com.lihaoyi" %% "upickle" % upickleVersion
+    libraryDependencies ++= Seq(
+      "com.github.pureconfig" %% "pureconfig-core" % "0.17.9"
+    )
   )
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = Seq(scala3Version))

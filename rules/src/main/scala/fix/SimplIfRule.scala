@@ -18,7 +18,6 @@ class SimplIfRule extends SemanticRule("SimplIfRule"):
           Patch.replaceTree(t, simplifyIf(t))
       }
     )
-    println(result.size)
     result.asPatch
 
   private def simplifyIf(tree: Tree): String =

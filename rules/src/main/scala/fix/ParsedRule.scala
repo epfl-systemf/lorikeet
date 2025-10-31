@@ -28,7 +28,24 @@ case class LintMessage(t: Tree, r: String) extends Diagnostic {
 
 class ParsedRule extends SemanticRule("ParsedRule"):
 
-  type Bindings = Map[String, Tree]
+  object Bindings {
+    val empty: Bindings = Bindings(Map.empty, Map.empty)
+  }
+  case class Bindings(
+      terms: Map[String, Tree],
+      types: Map[String, Tree]
+  ) {
+    def contains(name: String): Boolean =
+      terms.contains(name) || types.contains(name)
+    def addTerm(name: String, tree: Tree): Bindings =
+      tree match
+        case t: Term => this.copy(terms = terms + (name -> t))
+        case _       => this
+    def addType(name: String, tree: Tree): Bindings =
+      tree match
+        case t: Type => this.copy(types = types + (name -> t))
+        case _       => this
+  }
   type MatchResult = Option[Bindings]
 
   def parseRulesConfig(): List[Rule] =
@@ -76,7 +93,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       { case t =>
         ruleTrees
           .flatMap { case Rule(n, p, r) =>
-            compareTrees(p, t, Map.empty[String, Tree]).map { bindings =>
+            compareTrees(p, t, Bindings.empty).map { bindings =>
               r match
                 case None =>
                   // Lint only
@@ -108,6 +125,11 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Term.Apply(Term.Name("?"), List(Term.Block(List(arg))))
           ) =>
         matchWithPattern(arg, candidate, bindings)
+      // Wildcard + binding for symbols
+      case Term.Name(name) if name.startsWith("?") =>
+        Some(bindings.addTerm(name.stripPrefix("?"), candidate))
+      case Type.Name(name) if name.startsWith("?") =>
+        Some(bindings.addType(name.stripPrefix("?"), candidate))
       // General case
       case _ =>
         val prodStruc =
@@ -120,11 +142,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             .foldLeft[MatchResult](Some(bindings)) {
               case (None, _) => None
               case (Some(b), (p, c)) =>
-                compareFields(
-                  p,
-                  c,
-                  b
-                )
+                compareFields(p, c, b)
             }
         else None
 
@@ -132,6 +150,10 @@ class ParsedRule extends SemanticRule("ParsedRule"):
     (pat, cand) match
       // Trees
       case (p: Tree, c: Tree) => compareTrees(p, c, bindings)
+      // Options
+      case (Some(pv), Some(cv))              => compareFields(pv, cv, bindings)
+      case (None, None)                      => Some(bindings)
+      case (Some(_), None) | (None, Some(_)) => None
       // Iterables
       case (p: Iterable[_], c: Iterable[_]) =>
         if p.size == c.size then
@@ -142,6 +164,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         else None
       // Other fields
       case _ => if pat == cand then Some(bindings) else None
+
+      // NOTE : Perhaps we don't want to use "Iterable" above, as it may
+      // not be the right behavior for certain things like Strings...
 
   def matchWithPattern(
       pat: Tree,
@@ -165,7 +190,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             List(v: Tree)
           ) =>
         matchWithPattern(v, candidate, bindings).map { newBindings =>
-          newBindings.updated(name, candidate)
+          newBindings.addTerm(name, candidate)
         }
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
@@ -176,8 +201,16 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Term.Name("?"),
             List(Term.Block(List(Term.Name(name))))
           ) =>
-        if bindings.contains(name) then bindings(name)
+        if bindings.contains(name) then bindings.terms(name)
         else throw new Exception(s"No binding found for name: $name")
+      case Term.Name(name) if name.startsWith("?") =>
+        val bname = name.stripPrefix("?")
+        if bindings.contains(bname) then bindings.terms(bname)
+        else throw new Exception(s"No binding found for name: $bname")
+      case Type.Name(name) if name.startsWith("?") =>
+        val bname = name.stripPrefix("?")
+        if bindings.contains(bname) then bindings.types(bname)
+        else throw new Exception(s"No binding found for type name: $bname")
     }
 
   def collectTopLevelMatches(

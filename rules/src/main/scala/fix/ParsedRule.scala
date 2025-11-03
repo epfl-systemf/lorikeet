@@ -29,6 +29,12 @@ case class LintMessage(t: Tree, r: String) extends Diagnostic {
 }
 
 class ParsedRule extends SemanticRule("ParsedRule"):
+  private def sameBinding(t1: Tree, t2: Tree)(using
+      doc: SemanticDocument
+  ): Boolean =
+    (t1.symbol, t2.symbol) match
+      case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
+      case (s1, s2) => s1 == s2 && t1.structure == t2.structure
 
   object Bindings {
     val empty: Bindings = Bindings(Map.empty, Map.empty)
@@ -37,10 +43,12 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       terms: Map[String, Tree],
       types: Map[String, Tree]
   ) {
-    def checkAddTerm(name: String, tree: Tree): Option[Bindings] =
+    def checkAddTerm(name: String, tree: Tree)(using
+        doc: SemanticDocument
+    ): Option[Bindings] =
       terms.get(name) match
-        case Some(t) if t.syntax == tree.syntax => Some(this)
-        case Some(x)                            => None
+        case Some(t) if sameBinding(t, tree) => Some(this)
+        case Some(x)                         => None
         case None =>
           tree match
             case t: Term => Some(this.copy(terms = terms + (name -> t)))
@@ -48,10 +56,12 @@ class ParsedRule extends SemanticRule("ParsedRule"):
               throw new Exception(
                 s"Expected a Term for binding '$name', got: ${tree.syntax}"
               )
-    def checkAddType(name: String, tree: Tree): Option[Bindings] =
+    def checkAddType(name: String, tree: Tree)(using
+        doc: SemanticDocument
+    ): Option[Bindings] =
       types.get(name) match
-        case Some(t) if t.syntax == tree.syntax => Some(this)
-        case Some(x)                            => None
+        case Some(t) if sameBinding(t, tree) => Some(this)
+        case Some(x)                         => None
         case None =>
           tree match
             case t: Type => Some(this.copy(types = types + (name -> t)))
@@ -131,7 +141,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       pattern: Tree,
       candidate: Tree,
       bindings: Bindings
-  ): MatchResult =
+  )(using doc: SemanticDocument): MatchResult =
     pattern match
       // Special handling for particular constructs
       case Term.Apply(Term.Name("?"), List(Term.Block(List(arg)))) =>
@@ -161,7 +171,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             }
         else None
 
-  def compareFields(pat: Any, cand: Any, bindings: Bindings): MatchResult =
+  def compareFields(pat: Any, cand: Any, bindings: Bindings)(using
+      doc: SemanticDocument
+  ): MatchResult =
     (pat, cand) match
       // Trees
       case (p: Tree, c: Tree) => compareTrees(p, c, bindings)
@@ -187,7 +199,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       pat: Tree,
       candidate: Tree,
       bindings: Bindings
-  ): MatchResult =
+  )(using doc: SemanticDocument): MatchResult =
     pat match
       case Term.ApplyUnary(Term.Name("+"), arg) =>
         compareTrees(arg, candidate, bindings)
@@ -210,7 +222,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
 
-  def applyBindings(tree: Tree, bindings: Bindings): Tree =
+  def applyBindings(tree: Tree, bindings: Bindings)(using
+      doc: SemanticDocument
+  ): Tree =
     tree.transform {
       case Term.ApplyType(bind, substitutions)
           if substitutions.forall(isSubstitution) &&
@@ -255,7 +269,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       tree: Tree,
       substitutions: List[Tree],
       bindings: Bindings
-  ): Tree =
+  )(using doc: SemanticDocument): Tree =
     substitutions.foldLeft(tree) { (t, sub) =>
       sub match
         case Type.ApplyInfix(
@@ -268,7 +282,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
           (baseTree, subst) match
             case (Some(b), Some(s)) =>
               t.transform {
-                case x if x.structure == b.structure => s
+                case x if sameBinding(x, b) => s
               }
             case _ =>
               throw new Exception(

@@ -24,3 +24,11 @@ object Parsed:
       println("ok")
       iterate()
     iterate()
+
+  // Shadowed name should not be substituted
+  def findAllAndPrint4(): Boolean =
+    def iterate(): Boolean =
+      println("ok")
+      def iterate() = false
+      iterate()
+    iterate()

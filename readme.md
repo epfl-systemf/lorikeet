@@ -122,7 +122,6 @@ Referencing a binding that was not created in the matcher will result in an erro
 
 ## Planned
 
-- Better bindings - Use symbol information to bind names and types
 - Support for matching & binding sequences (e.g., parameter lists, argument lists, etc.)
 - Rethink allowing both `` `?f` `` and `?{f}` for referencing bindings in rewriter - currently redundant
 - May have to change substitution syntax eventually, as it will conflict (in future Scala 3) with pure functions that use `->` syntax. We could use something unused like `-->` instead.

@@ -17,3 +17,9 @@ object Parsed:
   def findAllAndPrint3(): Boolean =
     println("ok")
     findAllAndPrint3()
+
+  // Shadowed name should not be substituted
+  def findAllAndPrint4(): Boolean =
+    println("ok")
+    def iterate() = false
+    iterate()

@@ -93,4 +93,4 @@ Patterns are surrounded by `?{...}`. Everything inside the braces will be matche
 | `_`      | Wildcard    | matches anything                                      |
 | `a \| b` | Alternative | matches either pattern a or pattern b                 |
 | `+a`     | Escape      | `a` will be matched literaly rather than as a pattern |
-| `a -> b` | Binding     | matches pattern `b` and binds to `a`                  |
+| `a << b` | Binding     | matches pattern `b` and binds to `a`                  |

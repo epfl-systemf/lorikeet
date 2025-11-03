@@ -200,7 +200,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         matchWithPattern(f, candidate, bindings)
       case Term.ApplyInfix(
             Term.Name(name),
-            Term.Name("->"),
+            Term.Name("<<"),
             Nil,
             List(v: Tree)
           ) =>

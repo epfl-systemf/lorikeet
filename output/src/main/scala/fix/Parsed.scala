@@ -12,3 +12,8 @@ object Parsed:
       println("ok")
       true
     findAllAndPrint()
+
+  // Nested function with recursion should be inlined
+  def findAllAndPrint3(): Boolean =
+    println("ok")
+    findAllAndPrint3()

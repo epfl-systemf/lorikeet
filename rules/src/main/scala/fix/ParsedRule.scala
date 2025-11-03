@@ -212,26 +212,70 @@ class ParsedRule extends SemanticRule("ParsedRule"):
 
   def applyBindings(tree: Tree, bindings: Bindings): Tree =
     tree.transform {
+      case Term.ApplyType(bind, substitutions)
+          if substitutions.forall(isSubstitution) &&
+            extractBinding(bind, bindings).isDefined =>
+        val baseTree = extractBinding(bind, bindings).get
+        applySubstitutions(baseTree, substitutions, bindings)
+      case bind if extractBinding(bind, bindings).isDefined =>
+        extractBinding(bind, bindings).get
+    }
+
+  def extractBinding(
+      tree: Tree,
+      bindings: Bindings
+  ): Option[Tree] =
+    tree match
       case Term.Apply(
             Term.Name("?"),
             List(Term.Block(List(Term.Name(name))))
           ) =>
         bindings.terms.get(name) match
-          case Some(t) => t
+          case Some(t) => Some(t)
           case None =>
             throw new Exception(s"No binding found for name: $name")
       case Term.Name(name) if name.startsWith("?") =>
-        val bname = name.stripPrefix("?")
-        bindings.terms.get(bname) match
-          case Some(t) => t
+        bindings.terms.get(name.stripPrefix("?")) match
+          case Some(t) => Some(t)
           case None =>
-            throw new Exception(s"No binding found for name: $bname")
+            throw new Exception(s"No binding found for name: $name")
       case Type.Name(name) if name.startsWith("?") =>
-        val bname = name.stripPrefix("?")
-        bindings.types.get(bname) match
-          case Some(t) => t
+        bindings.types.get(name.stripPrefix("?")) match
+          case Some(t) => Some(t)
           case None =>
-            throw new Exception(s"No binding found for type name: $bname")
+            throw new Exception(s"No binding found for type name: $name")
+      case _ => None
+
+  def isSubstitution(tree: Tree): Boolean =
+    tree match
+      case Type.ApplyInfix(_, Type.Name("->"), _) => true
+      case _                                      => false
+
+  def applySubstitutions(
+      tree: Tree,
+      substitutions: List[Tree],
+      bindings: Bindings
+  ): Tree =
+    substitutions.foldLeft(tree) { (t, sub) =>
+      sub match
+        case Type.ApplyInfix(
+              Type.Name(name),
+              Type.Name("->"),
+              Type.Name(substName)
+            ) =>
+          val baseTree = extractBinding(Term.Name(name), bindings)
+          val subst = extractBinding(Term.Name(substName), bindings)
+          (baseTree, subst) match
+            case (Some(b), Some(s)) =>
+              t.transform {
+                case x if x.structure == b.structure => s
+              }
+            case _ =>
+              throw new Exception(
+                s"Could not find bindings for substitution: ${sub.syntax}"
+              )
+        case _ =>
+          throw new Exception(s"Unsupported substitution: ${sub.syntax}")
     }
 
   def collectTopLevelMatches(

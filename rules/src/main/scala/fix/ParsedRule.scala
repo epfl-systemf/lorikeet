@@ -216,16 +216,22 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Term.Name("?"),
             List(Term.Block(List(Term.Name(name))))
           ) =>
-        if bindings.contains(name) then bindings.terms(name)
-        else throw new Exception(s"No binding found for name: $name")
+        bindings.terms.get(name) match
+          case Some(t) => t
+          case None =>
+            throw new Exception(s"No binding found for name: $name")
       case Term.Name(name) if name.startsWith("?") =>
         val bname = name.stripPrefix("?")
-        if bindings.contains(bname) then bindings.terms(bname)
-        else throw new Exception(s"No binding found for name: $bname")
+        bindings.terms.get(bname) match
+          case Some(t) => t
+          case None =>
+            throw new Exception(s"No binding found for name: $bname")
       case Type.Name(name) if name.startsWith("?") =>
         val bname = name.stripPrefix("?")
-        if bindings.contains(bname) then bindings.types(bname)
-        else throw new Exception(s"No binding found for type name: $bname")
+        bindings.types.get(bname) match
+          case Some(t) => t
+          case None =>
+            throw new Exception(s"No binding found for type name: $bname")
     }
 
   def collectTopLevelMatches(

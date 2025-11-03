@@ -98,11 +98,11 @@ Patterns are surrounded by `?{...}`. Everything inside the braces will be matche
 | `_`      | Wildcard    | matches anything                                      |
 | `a \| b` | Alternative | matches either pattern a or pattern b                 |
 | `+a`     | Escape      | `a` will be matched literaly rather than as a pattern |
-| `a << b` | Binding     | matches pattern `b` and binds to `a`                  |
+| `a := b` | Binding     | matches pattern `b` and binds to `a`                  |
 
 Additionally, the syntax `` `?f` `` can be used to bind a name, type or term to the name `f`. If `` `?f` `` is used later in the pattern, it will match the same name, type or term, allowing for equality checks.
 
-It acts as a wildcard binding (similar to `?{f << _}`) on first use and as an equality check on subsequent uses.
+It acts as a wildcard binding (similar to `?{f := _}`) on first use and as an equality check on subsequent uses.
 
 ### Rewriter
 

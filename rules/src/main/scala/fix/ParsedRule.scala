@@ -37,16 +37,28 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       terms: Map[String, Tree],
       types: Map[String, Tree]
   ) {
-    def contains(name: String): Boolean =
-      terms.contains(name) || types.contains(name)
-    def addTerm(name: String, tree: Tree): Bindings =
-      tree match
-        case t: Term => this.copy(terms = terms + (name -> t))
-        case _       => this
-    def addType(name: String, tree: Tree): Bindings =
-      tree match
-        case t: Type => this.copy(types = types + (name -> t))
-        case _       => this
+    def checkAddTerm(name: String, tree: Tree): Option[Bindings] =
+      terms.get(name) match
+        case Some(t) if t.syntax == tree.syntax => Some(this)
+        case Some(x)                            => None
+        case None =>
+          tree match
+            case t: Term => Some(this.copy(terms = terms + (name -> t)))
+            case _ =>
+              throw new Exception(
+                s"Expected a Term for binding '$name', got: ${tree.syntax}"
+              )
+    def checkAddType(name: String, tree: Tree): Option[Bindings] =
+      types.get(name) match
+        case Some(t) if t.syntax == tree.syntax => Some(this)
+        case Some(x)                            => None
+        case None =>
+          tree match
+            case t: Type => Some(this.copy(types = types + (name -> t)))
+            case _ =>
+              throw new Exception(
+                s"Expected a Type for binding '$name', got: ${tree.syntax}"
+              )
   }
   type MatchResult = Option[Bindings]
 
@@ -130,9 +142,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         matchWithPattern(arg, candidate, bindings)
       // Wildcard + binding for symbols
       case Term.Name(name) if name.startsWith("?") =>
-        Some(bindings.addTerm(name.stripPrefix("?"), candidate))
+        bindings.checkAddTerm(name.stripPrefix("?"), candidate)
       case Type.Name(name) if name.startsWith("?") =>
-        Some(bindings.addType(name.stripPrefix("?"), candidate))
+        bindings.checkAddType(name.stripPrefix("?"), candidate)
       // General case
       case _ =>
         val prodStruc =
@@ -192,8 +204,8 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Nil,
             List(v: Tree)
           ) =>
-        matchWithPattern(v, candidate, bindings).map { newBindings =>
-          newBindings.addTerm(name, candidate)
+        matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
+          newBindings.checkAddTerm(name, candidate)
         }
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")

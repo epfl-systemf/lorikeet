@@ -7,11 +7,17 @@ import scala.collection.mutable.ListBuffer
 import scala.io.Source._
 import scala.util.{Try, Success, Failure}
 import pureconfig._
-import pureconfig.generic.derivation.default._
 import pureconfig.error.ConfigReaderFailures
+
+case class MatchOptions(
+    // Whether to match type ascriptions literally
+    // or only compare the symbol type
+    matchAscriptions: Boolean
+)
 
 case class RuleConfig(
     name: String,
+    matchAscriptions: Option[Boolean],
     pattern: String,
     rewrite: Option[String]
 ) derives ConfigReader
@@ -19,7 +25,8 @@ case class RulesConfig(rules: List[RuleConfig]) derives ConfigReader
 case class Rule(
     name: String,
     pattern: Tree,
-    rewrite: Option[Tree]
+    rewrite: Option[Tree],
+    matchOptions: MatchOptions
 )
 
 case class LintMessage(t: Tree, r: String) extends Diagnostic {
@@ -104,7 +111,10 @@ class ParsedRule extends SemanticRule("ParsedRule"):
                 s"Could not parse rewrite pattern for rule '${rule.name}': $msg"
               )
         case None => None
-      Rule(rule.name, matchTree, rewriteTree)
+      val matchOptions = MatchOptions(
+        matchAscriptions = rule.matchAscriptions.getOrElse(false)
+      )
+      Rule(rule.name, matchTree, rewriteTree, matchOptions)
     }
 
     ruleTrees
@@ -117,7 +127,8 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       doc.tree,
       { case t =>
         ruleTrees
-          .flatMap { case Rule(n, p, r) =>
+          .flatMap { case Rule(n, p, r, mo) =>
+            given MatchOptions = mo
             compareTrees(p, t, Bindings.empty).map { bindings =>
               r match
                 case None =>
@@ -138,41 +149,124 @@ class ParsedRule extends SemanticRule("ParsedRule"):
     result.asPatch
 
   def compareTrees(
-      pattern: Tree,
-      candidate: Tree,
+      pat: Tree,
+      cand: Tree,
       bindings: Bindings
-  )(using doc: SemanticDocument): MatchResult =
-    pattern match
+  )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
+    pat match
       // Special handling for particular constructs
       case Term.Apply(Term.Name("?"), List(Term.Block(List(arg)))) =>
-        matchWithPattern(arg, candidate, bindings)
+        matchWithPattern(arg, cand, bindings)
       case Term.AnonymousFunction(
             Term.Apply(Term.Name("?"), List(Term.Block(List(arg))))
           ) =>
-        matchWithPattern(arg, candidate, bindings)
+        matchWithPattern(arg, cand, bindings)
       // Wildcard + binding for symbols
       case Term.Name(name) if name.startsWith("?") =>
-        bindings.checkAddTerm(name.stripPrefix("?"), candidate)
+        bindings.checkAddTerm(name.stripPrefix("?"), cand)
       case Type.Name(name) if name.startsWith("?") =>
-        bindings.checkAddType(name.stripPrefix("?"), candidate)
+        bindings.checkAddType(name.stripPrefix("?"), cand)
+      // Special handling for type ascriptions
+      // For options with matchAscriptions = false:
+      // don't match the types literally: check the symbol type instead
+      case Defn.Def.After_4_7_3(mods, name, params, decltpe, body)
+          if !matchOptions.matchAscriptions =>
+        println(
+          s"Comparing Defn.Def with name ${name.value} and decltpe ${decltpe
+              .map(_.syntax)}"
+        )
+        cand match
+          case Defn.Def =>
+            decltpe match
+              case Some(tpe: Type) =>
+                if getSymbolType(cand) != getSymbolType(pat) then None
+                else compareProducts(pat, cand, bindings, Set("decltpe"))
+              case None =>
+                compareProducts(pat, cand, bindings, Set("decltpe"))
+          case _ => None
+      case Defn.Val(mods, pats, decltpe, t) if !matchOptions.matchAscriptions =>
+        println(
+          s"Comparing Defn.Val with decltpe ${decltpe
+              .map(_.syntax)}"
+        )
+        cand match
+          case Defn.Val =>
+            decltpe match
+              case Some(tpeTree: Type) =>
+                if getSymbolType(cand) != getSymbolType(pat) then None
+                else compareProducts(pat, cand, bindings, Set("decltpe"))
+              case None =>
+                compareProducts(pat, cand, bindings, Set("decltpe"))
+          case _ => None
+      case Term.Ascribe(t, tpe) if !matchOptions.matchAscriptions =>
+        println(
+          s"Comparing Term.Ascribe with type ${tpe.syntax}"
+        )
+        if getSymbolType(cand) != getSymbolType(pat) then None
+        else compareProducts(pat, cand, bindings, Set("tpe"))
+      case Term.Function.After_4_6_0(paramClause, body)
+          if !matchOptions.matchAscriptions =>
+        println(
+          s"Comparing Term.Function with paramClause ${paramClause.syntax}"
+        )
+        cand match
+          case c: Term.Function =>
+            // Compare params clause
+            val paramsMatch =
+              paramClause.values.zip(c.paramClause.values).forall {
+                case (patParam, candParam) =>
+                  patParam.decltpe match
+                    case Some(_) =>
+                      getSymbolType(patParam) == getSymbolType(candParam)
+                    case None =>
+                      compareFields(
+                        patParam.decltpe,
+                        candParam.decltpe,
+                        bindings
+                      ).isDefined
+              } && compareFields(
+                paramClause.mod,
+                c.paramClause.mod,
+                bindings
+              ).isDefined
+            if !paramsMatch then None
+            else
+              compareProducts(
+                pat,
+                cand,
+                bindings,
+                Set("paramClause")
+              )
+          case _ => None
       // General case
-      case _ =>
-        val prodStruc =
-          pattern.productPrefix == candidate.productPrefix &&
-            pattern.productArity == candidate.productArity
+      case _ => compareProducts(pat, cand, bindings)
 
-        if (prodStruc) then
-          pattern.productIterator
-            .zip(candidate.productIterator)
-            .foldLeft[MatchResult](Some(bindings)) {
-              case (None, _) => None
-              case (Some(b), (p, c)) =>
-                compareFields(p, c, b)
-            }
-        else None
+  def compareProducts(
+      pat: Product,
+      cand: Product,
+      bindings: Bindings,
+      skipFields: Set[String] = Set.empty
+  )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
+    val prodStruc =
+      pat.productPrefix == cand.productPrefix &&
+        pat.productArity == cand.productArity
+
+    if (prodStruc)
+    then
+      pat.productIterator
+        .zip(cand.productIterator)
+        .zip(pat.productElementNames)
+        .foldLeft[MatchResult](Some(bindings)) {
+          case (None, _) => None
+          case (Some(b), ((p, c), name)) =>
+            if skipFields.contains(name) then Some(b)
+            else compareFields(p, c, b)
+        }
+    else None
 
   def compareFields(pat: Any, cand: Any, bindings: Bindings)(using
-      doc: SemanticDocument
+      doc: SemanticDocument,
+      matchOptions: MatchOptions
   ): MatchResult =
     (pat, cand) match
       // Trees
@@ -199,11 +293,16 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       pat: Tree,
       candidate: Tree,
       bindings: Bindings
-  )(using doc: SemanticDocument): MatchResult =
+  )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
     pat match
       case Term.ApplyUnary(Term.Name("+"), arg) =>
         compareTrees(arg, candidate, bindings)
-      case Term.ApplyInfix(a, Term.Name("|"), Nil, List(b: Tree)) =>
+      case Term.ApplyInfix(
+            a,
+            Term.Name("|"),
+            Nil,
+            List(b: Tree)
+          ) =>
         matchWithPattern(a, candidate, bindings) match
           case s @ Some(_) => s
           case None        => matchWithPattern(b, candidate, bindings)
@@ -223,7 +322,8 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
 
   def applyBindings(tree: Tree, bindings: Bindings)(using
-      doc: SemanticDocument
+      doc: SemanticDocument,
+      matchOptions: MatchOptions
   ): Tree =
     tree.transform {
       case Term.ApplyType(bind, substitutions)
@@ -305,3 +405,16 @@ class ParsedRule extends SemanticRule("ParsedRule"):
     visit(tree)
     buf.toList
   }
+
+  def getSymbolType(t: Tree)(using
+      doc: SemanticDocument
+  ): Option[SemanticType] =
+    t.symbol.info match
+      case Some(info) =>
+        info.signature match
+          case s: ValueSignature =>
+            Some(s.tpe)
+          case s: MethodSignature =>
+            Some(s.returnType)
+          case _ => None
+      case _ => None

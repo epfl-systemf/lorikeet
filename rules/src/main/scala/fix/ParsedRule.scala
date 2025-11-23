@@ -48,7 +48,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
   }
   case class Bindings(
       terms: Map[String, Tree],
-      types: Map[String, Tree]
+      types: Map[String, Type]
   ) {
     def checkAddTerm(name: String, tree: Tree)(using
         doc: SemanticDocument
@@ -171,44 +171,56 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       // don't match the types literally: check the symbol type instead
       case Defn.Def.After_4_7_3(mods, name, params, decltpe, body)
           if !matchOptions.matchAscriptions =>
-        println(
-          s"Comparing Defn.Def with name ${name.value} and decltpe ${decltpe
-              .map(_.syntax)}"
-        )
         cand match
-          case Defn.Def =>
-            decltpe match
-              case Some(tpe: Type) =>
-                if getSymbolType(cand) != getSymbolType(pat) then None
-                else compareProducts(pat, cand, bindings, Set("decltpe"))
-              case None =>
+          case Defn.Def.After_4_7_3(_, _, _, candDecltpe, _) =>
+            (decltpe, candDecltpe) match
+              case (Some(patTpe), Some(candTpe)) =>
+                compareTrees(patTpe, candTpe, bindings) match
+                  case Some(newBindings) =>
+                    compareProducts(pat, cand, newBindings, Set("decltpe"))
+                  case None => None
+              case (Some(tpe), None) =>
+                matchTreeSemTypeWithAscription(cand, tpe, bindings) match
+                  case Some(newBindings) =>
+                    compareProducts(pat, cand, newBindings, Set("decltpe"))
+                  case None => None
+              case (None, _) =>
+                // Pattern has no declared type - accept any candidate type
                 compareProducts(pat, cand, bindings, Set("decltpe"))
           case _ => None
       case Defn.Val(mods, pats, decltpe, t) if !matchOptions.matchAscriptions =>
-        println(
-          s"Comparing Defn.Val with decltpe ${decltpe
-              .map(_.syntax)}"
-        )
         cand match
-          case Defn.Val =>
-            decltpe match
-              case Some(tpeTree: Type) =>
-                if getSymbolType(cand) != getSymbolType(pat) then None
-                else compareProducts(pat, cand, bindings, Set("decltpe"))
-              case None =>
+          case Defn.Val(_, _, candDecltpe, _) =>
+            (decltpe, candDecltpe) match
+              case (Some(patTpe), Some(candTpe)) =>
+                compareTrees(patTpe, candTpe, bindings) match
+                  case Some(newBindings) =>
+                    compareProducts(pat, cand, newBindings, Set("decltpe"))
+                  case None => None
+              case (Some(tpe), None) =>
+                matchTreeSemTypeWithAscription(cand, tpe, bindings) match
+                  case Some(newBindings) =>
+                    compareProducts(pat, cand, newBindings, Set("decltpe"))
+                  case None => None
+              case (None, _) =>
+                // Pattern has no declared type - accept any candidate type
                 compareProducts(pat, cand, bindings, Set("decltpe"))
           case _ => None
       case Term.Ascribe(t, tpe) if !matchOptions.matchAscriptions =>
-        println(
-          s"Comparing Term.Ascribe with type ${tpe.syntax}"
-        )
-        if getSymbolType(cand) != getSymbolType(pat) then None
-        else compareProducts(pat, cand, bindings, Set("tpe"))
+        cand match
+          case Term.Ascribe(candT, candTpe) =>
+            // Candidate is also an ascription - compare exactly
+            compareProducts(pat, cand, bindings)
+          case _ =>
+            // Candidate is not an ascription - match type semantically
+            matchTreeSemTypeWithAscription(cand, tpe, bindings) match
+              case Some(newBindings) =>
+                compareProducts(pat, cand, newBindings, Set("tpe"))
+              case None => None
       case Term.Function.After_4_6_0(paramClause, body)
           if !matchOptions.matchAscriptions =>
-        println(
-          s"Comparing Term.Function with paramClause ${paramClause.syntax}"
-        )
+        // TODO: This part is incomplete and needs
+        // to be updated
         cand match
           case c: Term.Function =>
             // Compare params clause
@@ -216,8 +228,12 @@ class ParsedRule extends SemanticRule("ParsedRule"):
               paramClause.values.zip(c.paramClause.values).forall {
                 case (patParam, candParam) =>
                   patParam.decltpe match
-                    case Some(_) =>
-                      getSymbolType(patParam) == getSymbolType(candParam)
+                    case Some(tpe) =>
+                      matchTreeSemTypeWithAscription(
+                        candParam,
+                        tpe,
+                        bindings
+                      ).isDefined // MAKE INTO FOLDLEFT
                     case None =>
                       compareFields(
                         patParam.decltpe,
@@ -416,5 +432,47 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Some(s.tpe)
           case s: MethodSignature =>
             Some(s.returnType)
-          case _ => None
-      case _ => None
+          case _ =>
+            System.err.println(
+              "Unsupported signature type for tree: " + t.syntax
+            )
+            None
+      case _ =>
+        System.err.println("No symbol info found for tree: " + t.syntax)
+        None
+
+  def matchTreeSemTypeWithAscription(
+      cand: Tree,
+      patType: Type,
+      b: Bindings
+  )(using doc: SemanticDocument): MatchResult =
+    // Get the semanticdb type of candidate tree
+    // Compare with the pattern type, considering bindings
+    val candType = getSymbolType(cand)
+
+    // No type info for candidate
+    if (candType.isEmpty) then return None
+
+    val patTrueType = patType match
+      case Type.Name(name) if name.startsWith("?") =>
+        b.types.get(name.stripPrefix("?")) match
+          case Some(tpe) => tpe
+          case None      =>
+            // No previous binding
+            // Creating new one here is illegal (binding semantic info)
+            System.err.println(
+              s"Cannot bind $name to implicit type variable: no explicit type ascription found"
+            )
+            return None
+      case _ => patType
+
+    (candType.get, patTrueType) match
+      case (TypeRef(_, candSymbol, Nil), Type.Name(patTypeName)) =>
+        if (candSymbol.displayName == patTypeName) then Some(b)
+        else None
+      case _ =>
+        System.err.println(
+          s"Unsupported type comparison between candidate type ${candType.get} " +
+            s"and pattern type ${patType} (${patTrueType})"
+        )
+        None

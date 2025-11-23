@@ -229,7 +229,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
                     case (Some(b), (patParam, candParam)) =>
                       (patParam.decltpe, candParam.decltpe) match
                         case (Some(patTpe), Some(candTpe)) =>
-                          compareTrees(patTpe, candTpe, b)
+                          compareProducts(patParam,candParam,b)
                         case (Some(tpe), None) =>
                           matchTreeSemTypeWithAscription(candParam, tpe, b)
                             .flatMap(newBindings =>

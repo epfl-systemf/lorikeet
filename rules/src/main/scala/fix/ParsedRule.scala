@@ -50,32 +50,21 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       terms: Map[String, Tree],
       types: Map[String, Type]
   ) {
-    def checkAddTerm(name: String, tree: Tree)(using
+    def checkAddTerm(name: String, term: Term)(using
         doc: SemanticDocument
     ): Option[Bindings] =
       terms.get(name) match
-        case Some(t) if sameBinding(t, tree) => Some(this)
+        case Some(t) if sameBinding(t, term) => Some(this)
         case Some(x)                         => None
-        case None =>
-          tree match
-            case t: Term => Some(this.copy(terms = terms + (name -> t)))
-            case _ =>
-              throw new Exception(
-                s"Expected a Term for binding '$name', got: ${tree.syntax}"
-              )
-    def checkAddType(name: String, tree: Tree)(using
+        case None => Some(this.copy(terms = terms + (name -> term)))
+
+    def checkAddType(name: String, tpe: Type)(using
         doc: SemanticDocument
     ): Option[Bindings] =
       types.get(name) match
-        case Some(t) if sameBinding(t, tree) => Some(this)
-        case Some(x)                         => None
-        case None =>
-          tree match
-            case t: Type => Some(this.copy(types = types + (name -> t)))
-            case _ =>
-              throw new Exception(
-                s"Expected a Type for binding '$name', got: ${tree.syntax}"
-              )
+        case Some(t) if sameBinding(t, tpe) => Some(this)
+        case Some(x)                        => None
+        case None => Some(this.copy(types = types + (name -> tpe)))
   }
   type MatchResult = Option[Bindings]
 
@@ -169,9 +158,13 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         matchWithPattern(arg, cand, bindings)
       // Wildcard + binding for symbols
       case Term.Name(name) if name.startsWith("?") =>
-        bindings.checkAddTerm(name.stripPrefix("?"), cand)
+        cand match
+          case t: Term => bindings.checkAddTerm(name.stripPrefix("?"), t)
+          case _       => None
       case Type.Name(name) if name.startsWith("?") =>
-        bindings.checkAddType(name.stripPrefix("?"), cand)
+        cand match
+          case t: Type => bindings.checkAddType(name.stripPrefix("?"), t)
+          case _       => None
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead
@@ -338,7 +331,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
             Term.ArgClause(List(v), _)
           ) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
-          newBindings.checkAddTerm(name, candidate)
+          candidate match
+            case t: Term => newBindings.checkAddTerm(name, t)
+            case _       => None
         }
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")

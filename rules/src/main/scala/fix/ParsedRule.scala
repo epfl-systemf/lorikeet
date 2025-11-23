@@ -8,6 +8,7 @@ import scala.io.Source._
 import scala.util.{Try, Success, Failure}
 import pureconfig._
 import pureconfig.error.ConfigReaderFailures
+import scala.meta.Term.AnonymousFunction
 
 case class MatchOptions(
     // Whether to match type ascriptions literally
@@ -336,11 +337,10 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
 
   def applyBindings(tree: Tree, bindings: Bindings)(using
-      doc: SemanticDocument,
-      matchOptions: MatchOptions
+      doc: SemanticDocument
   ): Tree =
     tree.transform {
-      case Term.ApplyType.After_4_6_0(bind, Type.ArgClause(substitutions))
+      case Term.Apply.After_4_6_0(bind, Term.ArgClause(substitutions, _))
           if substitutions.forall(isSubstitution) &&
             extractBinding(bind, bindings).isDefined =>
         val baseTree = extractBinding(bind, bindings).get
@@ -376,8 +376,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
 
   def isSubstitution(tree: Tree): Boolean =
     tree match
-      case Type.ApplyInfix(_, Type.Name("->"), _) => true
-      case _                                      => false
+      case Term.AnonymousFunction(sub) => isSubstitution(sub)
+      case Term.ApplyInfix.After_4_6_0(_, Term.Name("->"), _, _) => true
+      case _                                                     => false
 
   def applySubstitutions(
       tree: Tree,
@@ -385,26 +386,36 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       bindings: Bindings
   )(using doc: SemanticDocument): Tree =
     substitutions.foldLeft(tree) { (t, sub) =>
-      sub match
-        case Type.ApplyInfix(
-              Type.Name(name),
-              Type.Name("->"),
-              Type.Name(substName)
-            ) =>
-          val baseTree = extractBinding(Term.Name(name), bindings)
-          val subst = extractBinding(Term.Name(substName), bindings)
-          (baseTree, subst) match
-            case (Some(b), Some(s)) =>
-              t.transform {
-                case x if sameBinding(x, b) => s
-              }
-            case _ =>
-              throw new Exception(
-                s"Could not find bindings for substitution: ${sub.syntax}"
-              )
-        case _ =>
-          throw new Exception(s"Unsupported substitution: ${sub.syntax}")
+      applySingleSubstitution(t, sub, bindings)
     }
+
+  def applySingleSubstitution(
+      tree: Tree,
+      substitution: Tree,
+      bindings: Bindings
+  )(using doc: SemanticDocument): Tree =
+    substitution match
+      case Term.AnonymousFunction(sub) =>
+        applySingleSubstitution(tree, sub, bindings)
+      case Term.ApplyInfix.After_4_6_0(
+            Term.Name(name),
+            Term.Name("->"),
+            _,
+            Term.ArgClause(List(subst), _)
+          ) =>
+        val baseTree = extractBinding(Term.Name(name), bindings)
+        val substTree = applyBindings(subst, bindings)
+        baseTree match
+          case Some(b) =>
+            tree.transform {
+              case x if sameBinding(x, b) => subst
+            }
+          case _ =>
+            throw new Exception(
+              s"Could not find bindings for substitution: ${substitution.syntax}"
+            )
+      case _ =>
+        throw new Exception(s"Unsupported substitution: ${substitution.syntax}")
 
   def collectTopLevelMatches(
       tree: Tree,

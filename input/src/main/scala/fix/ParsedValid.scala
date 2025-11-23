@@ -47,3 +47,17 @@ object ParsedValid:
       def iterate() = false
       iterate()
     iterate()
+
+  // Nested function should be inlined (semantic return type)
+  def findAllAndPrint5(): Boolean =
+    def iterate() =
+      println("ok")
+      true
+    iterate()
+
+  // Nested function should not be inlined (non matching semantic return type)
+  def findAllAndPrint6(): Unit =
+    def iterate() =
+      println("ok")
+      true
+    iterate()

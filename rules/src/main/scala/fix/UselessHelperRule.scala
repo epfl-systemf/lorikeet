@@ -11,16 +11,16 @@ class UselessHelperRule extends SemanticRule("UselessHelperRule"):
   override def fix(implicit doc: SemanticDocument): Patch =
     val result = doc.tree
       .collect({
-        case outerFun @ Defn.Def(_, _, _, _, _, _) =>
+        case outerFun @ Defn.Def.After_4_7_3(_, _, _, _, _) =>
           outerFun.body match
             case Term.Block(
                   List(
-                    innerFun @ Defn.Def(_, _, _, _, _, _),
+                    innerFun @ Defn.Def.After_4_7_3(_, _, _, _, _),
                     innerCall
                   )
                 ) if outerFun.decltpe.structure == innerFun.decltpe.structure =>
               innerCall match
-                case Term.Apply(
+                case Term.Apply.After_4_6_0(
                       Term.Name(callName),
                       innerCallArgs
                     )

@@ -155,10 +155,16 @@ class ParsedRule extends SemanticRule("ParsedRule"):
   )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
     pat match
       // Special handling for particular constructs
-      case Term.Apply(Term.Name("?"), List(Term.Block(List(arg)))) =>
+      case Term.Apply.After_4_6_0(
+            Term.Name("?"),
+            Term.ArgClause(List(Term.Block(List(arg))), _)
+          ) =>
         matchWithPattern(arg, cand, bindings)
       case Term.AnonymousFunction(
-            Term.Apply(Term.Name("?"), List(Term.Block(List(arg))))
+            Term.Apply.After_4_6_0(
+              Term.Name("?"),
+              Term.ArgClause(List(Term.Block(List(arg))), _)
+            )
           ) =>
         matchWithPattern(arg, cand, bindings)
       // Wildcard + binding for symbols
@@ -313,11 +319,11 @@ class ParsedRule extends SemanticRule("ParsedRule"):
     pat match
       case Term.ApplyUnary(Term.Name("+"), arg) =>
         compareTrees(arg, candidate, bindings)
-      case Term.ApplyInfix(
+      case Term.ApplyInfix.After_4_6_0(
             a,
             Term.Name("|"),
-            Nil,
-            List(b: Tree)
+            Type.ArgClause(Nil),
+            Term.ArgClause(List(b), _)
           ) =>
         matchWithPattern(a, candidate, bindings) match
           case s @ Some(_) => s
@@ -325,11 +331,11 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       case Term.Placeholder() => Some(bindings)
       case Term.AnonymousFunction(f) =>
         matchWithPattern(f, candidate, bindings)
-      case Term.ApplyInfix(
+      case Term.ApplyInfix.After_4_6_0(
             Term.Name(name),
             Term.Name(":="),
-            Nil,
-            List(v: Tree)
+            Type.ArgClause(Nil),
+            Term.ArgClause(List(v), _)
           ) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           newBindings.checkAddTerm(name, candidate)
@@ -342,7 +348,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       matchOptions: MatchOptions
   ): Tree =
     tree.transform {
-      case Term.ApplyType(bind, substitutions)
+      case Term.ApplyType.After_4_6_0(bind, Type.ArgClause(substitutions))
           if substitutions.forall(isSubstitution) &&
             extractBinding(bind, bindings).isDefined =>
         val baseTree = extractBinding(bind, bindings).get
@@ -356,9 +362,9 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       bindings: Bindings
   ): Option[Tree] =
     tree match
-      case Term.Apply(
+      case Term.Apply.After_4_6_0(
             Term.Name("?"),
-            List(Term.Block(List(Term.Name(name))))
+            Term.ArgClause(List(Term.Block(List(Term.Name(name)))), _)
           ) =>
         bindings.terms.get(name) match
           case Some(t) => Some(t)

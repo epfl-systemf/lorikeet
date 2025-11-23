@@ -1,9 +1,19 @@
 package fix
 
 object Parsed:
-  // Lambda to placeholder syntax
-  val words = List("cat", "dog", "elephant")
-  words.map(_.length())
-  words.foldLeft(0)(_ + _.length())
-  // Remain unchanged
-  words.foldLeft("")((acc, x) => acc + x)
+  // Expand a map
+  def expand(l: List[Int]): List[Int] =
+    l match
+      case Nil => Nil
+      case head :: tail =>
+        (head * 2) :: expand(tail)
+  def expand2(l: List[Int]): List[Int] =
+    l match
+      case Nil => Nil
+      case head :: tail =>
+        (head * head) :: expand2(tail)
+  def expand3(l: List[Int]): List[Int] =
+    l match
+      case Nil => Nil
+      case head :: tail =>
+        (head + 1) :: expand3(tail)

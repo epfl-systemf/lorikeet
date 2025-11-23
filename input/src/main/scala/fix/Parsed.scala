@@ -4,9 +4,10 @@ rule = ParsedRule
 package fix
 
 object Parsed:
-  // Lambda to placeholder syntax
-  val words = List("cat", "dog", "elephant")
-  words.map((x) => x.length())
-  words.foldLeft(0)((acc, x) => acc + x.length())
-  // Remain unchanged
-  words.foldLeft("")((acc, x) => acc + x)
+  // Expand a map
+  def expand(l: List[Int]) =
+    l.map((x: Int) => x * 2)
+  def expand2(l: List[Int]) =
+    l.map((x) => x * x)
+  def expand3(l: List[Int]): List[Int] =
+    l.map(x => x + 1)

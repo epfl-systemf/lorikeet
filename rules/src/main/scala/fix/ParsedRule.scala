@@ -214,8 +214,6 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       case Term.Function
             .After_4_6_0(Term.ParamClause(patParams, patParamMods), body)
           if !matchOptions.matchAscriptions =>
-        // TODO: This part is incomplete and needs
-        // to be updated
         cand match
           case Term.Function.After_4_6_0(
                 Term.ParamClause(candParams, candParamMods),
@@ -223,24 +221,28 @@ class ParsedRule extends SemanticRule("ParsedRule"):
               ) =>
             // Compare parameters (with semantic type matching)
             val paramsMatch =
-              patParams.zip(candParams).foldLeft[MatchResult](Some(bindings)) {
-                case (Some(b), (patParam, candParam)) =>
-                  (patParam.decltpe, candParam.decltpe) match
-                    case (Some(patTpe), Some(candTpe)) =>
-                      compareTrees(patTpe, candTpe, b)
-                    case (Some(tpe), None) =>
-                      matchTreeSemTypeWithAscription(candParam, tpe, b).flatMap(
-                        newBindings =>
-                          compareProducts(
-                            patParam,
-                            candParam,
-                            newBindings,
-                            Set("decltpe")
-                          )
-                      )
-                    case (None, _) => Some(b)
-                case (None, _) => None
-              }
+              if patParams.size != candParams.size then None
+              else
+                patParams
+                  .zip(candParams)
+                  .foldLeft[MatchResult](Some(bindings)) {
+                    case (Some(b), (patParam, candParam)) =>
+                      (patParam.decltpe, candParam.decltpe) match
+                        case (Some(patTpe), Some(candTpe)) =>
+                          compareTrees(patTpe, candTpe, b)
+                        case (Some(tpe), None) =>
+                          matchTreeSemTypeWithAscription(candParam, tpe, b)
+                            .flatMap(newBindings =>
+                              compareProducts(
+                                patParam,
+                                candParam,
+                                newBindings,
+                                Set("decltpe")
+                              )
+                            )
+                        case (None, _) => Some(b)
+                    case (None, _) => None
+                  }
             paramsMatch
               .flatMap(newBindings =>
                 // Compare parameter modifiers

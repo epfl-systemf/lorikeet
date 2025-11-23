@@ -344,6 +344,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
     tree.transform {
       case Term.Apply.After_4_6_0(bind, Term.ArgClause(substitutions, _))
           if substitutions.forall(isSubstitution) &&
+            substitutions.nonEmpty &&
             extractBinding(bind, bindings).isDefined =>
         val baseTree = extractBinding(bind, bindings).get
         applySubstitutions(baseTree, substitutions, bindings)

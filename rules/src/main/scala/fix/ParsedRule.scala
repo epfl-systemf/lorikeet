@@ -3,12 +3,10 @@ package fix
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
-import scala.collection.mutable.ListBuffer
 import scala.io.Source._
 import scala.util.{Try, Success, Failure}
 import pureconfig._
 import pureconfig.error.ConfigReaderFailures
-import scala.meta.Term.AnonymousFunction
 
 case class MatchOptions(
     // Whether to match type ascriptions literally
@@ -37,38 +35,6 @@ case class LintMessage(t: Tree, r: String) extends Diagnostic {
 }
 
 class ParsedRule extends SemanticRule("ParsedRule"):
-  private def sameBinding(t1: Tree, t2: Tree)(using
-      doc: SemanticDocument
-  ): Boolean =
-    (t1.symbol, t2.symbol) match
-      case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
-      case (s1, s2) => s1 == s2 && t1.structure == t2.structure
-
-  object Bindings {
-    val empty: Bindings = Bindings(Map.empty, Map.empty)
-  }
-  case class Bindings(
-      terms: Map[String, Tree],
-      types: Map[String, Type]
-  ) {
-    def checkAddTerm(name: String, term: Term)(using
-        doc: SemanticDocument
-    ): Option[Bindings] =
-      terms.get(name) match
-        case Some(t) if sameBinding(t, term) => Some(this)
-        case Some(x)                         => None
-        case None => Some(this.copy(terms = terms + (name -> term)))
-
-    def checkAddType(name: String, tpe: Type)(using
-        doc: SemanticDocument
-    ): Option[Bindings] =
-      types.get(name) match
-        case Some(t) if sameBinding(t, tpe) => Some(this)
-        case Some(x)                        => None
-        case None => Some(this.copy(types = types + (name -> tpe)))
-  }
-  type MatchResult = Option[Bindings]
-
   def parseRulesConfig(): List[Rule] =
     val configFile = sys.env.get("RULES_CONF") match
       case None           => ".rules.conf"
@@ -109,6 +75,17 @@ class ParsedRule extends SemanticRule("ParsedRule"):
 
     ruleTrees
 
+  def collectTopLevelMatches(
+      tree: Tree,
+      f: Tree => Patch
+  ): List[Patch] =
+    def visit(t: Tree): List[Patch] = {
+      f(t) match
+        case p if !p.isEmpty => List(p) // don't recurse into children
+        case _               => t.children.flatMap(visit)
+    }
+    visit(tree)
+
   override def fix(implicit doc: SemanticDocument): Patch =
 
     val ruleTrees = parseRulesConfig()
@@ -118,31 +95,68 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       { case t =>
         ruleTrees
           .flatMap { case Rule(n, p, r, mo) =>
-            given MatchOptions = mo
-            compareTrees(p, t, Bindings.empty).map { bindings =>
+            val matcher = new Matcher()(using doc, mo)
+            matcher.compareTrees(p, t, Matcher.Bindings.empty).map { bindings =>
               r match
                 case None =>
                   // Lint only
                   Patch.lint(LintMessage(t, n))
                 case Some(r) =>
                   // Rewrite
-                  val rewrittenTree = applyBindings(r, bindings)
+                  val rewrittenTree = matcher.applyBindings(r, bindings)
                   Patch.replaceTree(t, rewrittenTree.syntax)
             }
           }
           .headOption
           .getOrElse(Patch.empty)
-
       }
     )
 
     result.asPatch
 
+object Matcher:
+  object Bindings {
+    val empty: Bindings = Bindings(Map.empty, Map.empty)
+  }
+  case class Bindings(
+      terms: Map[String, Tree],
+      types: Map[String, Type]
+  ) {
+    def checkAddTerm(name: String, term: Term)(using
+        doc: SemanticDocument
+    ): Option[Bindings] =
+      terms.get(name) match
+        case Some(t) if sameBinding(t, term) => Some(this)
+        case Some(x)                         => None
+        case None => Some(this.copy(terms = terms + (name -> term)))
+
+    def checkAddType(name: String, tpe: Type)(using
+        doc: SemanticDocument
+    ): Option[Bindings] =
+      types.get(name) match
+        case Some(t) if sameBinding(t, tpe) => Some(this)
+        case Some(x)                        => None
+        case None => Some(this.copy(types = types + (name -> tpe)))
+  }
+  private def sameBinding(t1: Tree, t2: Tree)(using
+      doc: SemanticDocument
+  ): Boolean =
+    (t1.symbol, t2.symbol) match
+      case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
+      case (s1, s2) => s1 == s2 && t1.structure == t2.structure
+  type MatchResult = Option[Bindings]
+
+case class Matcher()(using
+    doc: SemanticDocument,
+    matchOptions: MatchOptions
+):
+  import Matcher._
+
   def compareTrees(
       pat: Tree,
       cand: Tree,
       bindings: Bindings
-  )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
+  ): MatchResult =
     pat match
       // Special handling for particular constructs
       case Term.Apply.After_4_6_0(
@@ -229,7 +243,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
                     case (Some(b), (patParam, candParam)) =>
                       (patParam.decltpe, candParam.decltpe) match
                         case (Some(patTpe), Some(candTpe)) =>
-                          compareProducts(patParam,candParam,b)
+                          compareProducts(patParam, candParam, b)
                         case (Some(tpe), None) =>
                           matchTreeSemTypeWithAscription(candParam, tpe, b)
                             .flatMap(newBindings =>
@@ -261,7 +275,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       cand: Product,
       bindings: Bindings,
       skipFields: Set[String] = Set.empty
-  )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
+  ): MatchResult =
     val prodStruc =
       pat.productPrefix == cand.productPrefix &&
         pat.productArity == cand.productArity
@@ -279,10 +293,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
         }
     else None
 
-  def compareFields(pat: Any, cand: Any, bindings: Bindings)(using
-      doc: SemanticDocument,
-      matchOptions: MatchOptions
-  ): MatchResult =
+  def compareFields(pat: Any, cand: Any, bindings: Bindings): MatchResult =
     (pat, cand) match
       // Trees
       case (p: Tree, c: Tree) => compareTrees(p, c, bindings)
@@ -308,7 +319,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       pat: Tree,
       candidate: Tree,
       bindings: Bindings
-  )(using doc: SemanticDocument, matchOptions: MatchOptions): MatchResult =
+  ): MatchResult =
     pat match
       case Term.ApplyUnary(Term.Name("+"), arg) =>
         compareTrees(arg, candidate, bindings)
@@ -338,9 +349,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
 
-  def applyBindings(tree: Tree, bindings: Bindings)(using
-      doc: SemanticDocument
-  ): Tree =
+  def applyBindings(tree: Tree, bindings: Bindings): Tree =
     tree.transform {
       case Term.Apply.After_4_6_0(bind, Term.ArgClause(substitutions, _))
           if substitutions.forall(isSubstitution) &&
@@ -387,7 +396,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       tree: Tree,
       substitutions: List[Tree],
       bindings: Bindings
-  )(using doc: SemanticDocument): Tree =
+  ): Tree =
     substitutions.foldLeft(tree) { (t, sub) =>
       applySingleSubstitution(t, sub, bindings)
     }
@@ -396,7 +405,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       tree: Tree,
       substitution: Tree,
       bindings: Bindings
-  )(using doc: SemanticDocument): Tree =
+  ): Tree =
     substitution match
       case Term.AnonymousFunction(sub) =>
         applySingleSubstitution(tree, sub, bindings)
@@ -420,23 +429,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       case _ =>
         throw new Exception(s"Unsupported substitution: ${substitution.syntax}")
 
-  def collectTopLevelMatches(
-      tree: Tree,
-      f: Tree => Patch
-  ): List[Patch] = {
-    val buf = ListBuffer.empty[Patch]
-    def visit(t: Tree): Unit = {
-      f(t) match
-        case p if !p.isEmpty => buf += p // don't recurse into children
-        case _               => t.children.foreach(visit)
-    }
-    visit(tree)
-    buf.toList
-  }
-
-  def getSymbolType(t: Tree)(using
-      doc: SemanticDocument
-  ): Option[SemanticType] =
+  def getSymbolType(t: Tree): Option[SemanticType] =
     t.symbol.info match
       case Some(info) =>
         info.signature match
@@ -457,7 +450,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       cand: Tree,
       patType: Type,
       b: Bindings
-  )(using doc: SemanticDocument): MatchResult =
+  ): MatchResult =
     // Get the semanticdb type of candidate tree
     // Compare with the pattern type, considering bindings
     val candType = getSymbolType(cand)

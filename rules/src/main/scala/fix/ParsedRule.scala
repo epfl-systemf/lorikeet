@@ -117,11 +117,18 @@ class ParsedRule extends SemanticRule("ParsedRule"):
 object Matcher:
   object Bindings {
     val empty: Bindings = Bindings(Map.empty, Map.empty)
+    def sameBinding(t1: Tree, t2: Tree)(using
+        doc: SemanticDocument
+    ): Boolean =
+      (t1.symbol, t2.symbol) match
+        case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
+        case (s1, s2) => s1 == s2 && t1.structure == t2.structure
   }
   case class Bindings(
       terms: Map[String, Tree],
       types: Map[String, Type]
   ) {
+    import Bindings.sameBinding
     def checkAddTerm(name: String, term: Term)(using
         doc: SemanticDocument
     ): Option[Bindings] =
@@ -138,12 +145,7 @@ object Matcher:
         case Some(x)                        => None
         case None => Some(this.copy(types = types + (name -> tpe)))
   }
-  private def sameBinding(t1: Tree, t2: Tree)(using
-      doc: SemanticDocument
-  ): Boolean =
-    (t1.symbol, t2.symbol) match
-      case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
-      case (s1, s2) => s1 == s2 && t1.structure == t2.structure
+
   type MatchResult = Option[Bindings]
 
 case class Matcher()(using
@@ -420,7 +422,7 @@ case class Matcher()(using
         baseTree match
           case Some(b) =>
             tree.transform {
-              case x if sameBinding(x, b) => subst
+              case x if Bindings.sameBinding(x, b) => subst
             }
           case _ =>
             throw new Exception(

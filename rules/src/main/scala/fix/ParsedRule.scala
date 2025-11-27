@@ -216,7 +216,8 @@ case class Matcher()(using
                 // Pattern has no declared type - accept any candidate type
                 compareProducts(pat, cand, bindings, Set("decltpe"))
           case _ => None
-      case Defn.Var.After_4_7_2(mods, pats, decltpe, t) if !matchOptions.matchAscriptions =>
+      case Defn.Var.After_4_7_2(mods, pats, decltpe, t)
+          if !matchOptions.matchAscriptions =>
         cand match
           case Defn.Var(_, _, candDecltpe, _) =>
             (decltpe, candDecltpe) match
@@ -476,6 +477,9 @@ case class Matcher()(using
     if (candType.isEmpty) then return None
 
     val patTrueType = patType match
+      case Type.Name("?") =>
+        // Wildcard - accept any candidate type
+        return Some(b)
       case Type.Name(name) if name.startsWith("?") =>
         b.types.get(name.stripPrefix("?")) match
           case Some(tpe) => tpe

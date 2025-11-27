@@ -68,3 +68,5 @@ object ParsedValid:
   words.foldLeft(0)((acc, x) => acc + x.length())
   // Remain unchanged
   words.foldLeft("")((acc, x) => acc + x)
+
+  var test = 0 // assert: ParsedRule

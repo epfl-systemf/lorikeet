@@ -57,3 +57,5 @@ object ParsedValid:
   words.foldLeft(0)(_ + _.length())
   // Remain unchanged
   words.foldLeft("")((acc, x) => acc + x)
+
+  var test = 0

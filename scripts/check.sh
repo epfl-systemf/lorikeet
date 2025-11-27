@@ -1,26 +1,36 @@
 #!/bin/bash
 
+ROOT="$(pwd)"
+
 # --- CONFIG ---
 # Directory of the lab project with build.sbt and scalafix config
-LAB_DIR="./find"
+LAB_DIR="$ROOT/find"
 # Directory containing student submissions
-SUBMISSIONS_DIR="./submissions"
+SUBMISSIONS_DIR="$ROOT/submissions"
 # Submitted file to check
 TARGET_FILE="find.scala"
 # Path within the lab project where the submitted file should be placed
 TARGET_PATH="src/main/scala/find"
 # Log file to store results
-LOG_FILE="./grading_log_$(date +%Y.%m.%d_%H.%M.%S).txt"
+LOG_FILE="$ROOT/grading_log_$(date +%Y.%m.%d_%H.%M.%S).txt"
+# Directory to store the diffs between original (formatted) and refactored (formatted) code
+DIFF_DIR="$ROOT/grading_diffs_$(date +%Y.%m.%d_%H.%M.%S)"
+# Directory to store temporary files
+TMP_DIR="$ROOT/tmp"
 # ---------------------
 
+mkdir -p "$DIFF_DIR"
+mkdir -p "$TMP_DIR"
+
 echo "Starting automated checks. Log file: $LOG_FILE"
+echo "Refactoring diffs will be saved in: $DIFF_DIR"
 echo "------------------------------------------------------" >> "$LOG_FILE"
 
 # --- SBT SERVER ---
 echo "Starting persistent sbt server in $LAB_DIR..."
 (cd "$LAB_DIR" && sbt -Dsbt.server.forcestart=true "compile") & # launch sbt server in background
 SBT_PID=$!
-trap "echo 'Stopping sbt server...'; kill $SBT_PID 2>/dev/null" EXIT # kill the server on script exit
+trap "echo 'Stopping sbt server...'; kill $SBT_PID 2>/dev/null; rm -rf '$TMP_DIR'" EXIT
 sleep 10 # time to start the server
 
 MISSING_FILE_SUBMISSIONS=0
@@ -43,31 +53,48 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
     fi
 
     let TOTAL_SUBMISSIONS++
+
+    TARGET_FILE_PATH="$TARGET_PATH/$TARGET_FILE"
+    TMP_ORIGINAL="$TMP_DIR/$STUDENT_ID.$TARGET_FILE.original"
+    TMP_REFACTORED="$TMP_DIR/$STUDENT_ID.$TARGET_FILE.refactored"
+    DIFF_OUTPUT_FILE="$DIFF_DIR/$STUDENT_ID-$(basename "$LATEST_ATTEMPT_DIR").diff"
+
     cp "$SUBMISSION_FILE" "$LAB_DIR/$TARGET_PATH/"
     pushd "$LAB_DIR" > /dev/null
 
-    sbt --client "compile" >> "../$LOG_FILE" 2>&1
+    sbt --client "scalafmt" >> "$LOG_FILE" 2>&1
+    cp "$TARGET_FILE_PATH" "$TMP_ORIGINAL"
+
+    sbt --client "compile" >> "$LOG_FILE" 2>&1
     COMPILE_EXIT_CODE=$?
 
     if [ $COMPILE_EXIT_CODE -ne 0 ]; then
-        echo "   -> ❌ ERROR:   $SUBMISSION_ID" | tee -a "../$LOG_FILE"
+        echo "   -> ❌ ERROR:   $SUBMISSION_ID" | tee -a "$LOG_FILE"
         let COMPILE_ERROR_SUBMISSIONS++
-        rm $TARGET_PATH/$TARGET_FILE
+        rm $TARGET_FILE_PATH
+        rm $TMP_ORIGINAL
         popd > /dev/null
         continue
     fi
     
-    sbt --client "scalafix --check" >> "../$LOG_FILE" 2>&1
+    sbt --client "scalafix" >> "$LOG_FILE" 2>&1
     SCALAFIX_EXIT_CODE=$?
+
+    sbt --client "scalafmt" >> "$LOG_FILE" 2>&1
+    cp "$TARGET_FILE_PATH" "$TMP_REFACTORED"
+
+    diff -u "$TMP_ORIGINAL" "$TMP_REFACTORED" > "$DIFF_OUTPUT_FILE"
     
     if [ $SCALAFIX_EXIT_CODE -ne 0 ]; then
         let RULE_MATCH_SUBMISSIONS++
-        echo "   -> ⚠️  ISSUES:  $SUBMISSION_ID" | tee -a "../$LOG_FILE"
+        echo "   -> ⚠️  ISSUES:  $SUBMISSION_ID" | tee -a "$LOG_FILE"
     else
-        echo "   -> ✅ SUCCESS: $SUBMISSION_ID" | tee -a "../$LOG_FILE"
+        echo "   -> ✅ SUCCESS: $SUBMISSION_ID" | tee -a "$LOG_FILE"
     fi
 
-    rm $TARGET_PATH/$TARGET_FILE
+    rm $TARGET_FILE_PATH
+    rm $TMP_ORIGINAL
+    rm $TMP_REFACTORED
     popd > /dev/null
 done
 

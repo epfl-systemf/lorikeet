@@ -17,6 +17,7 @@ case class MatchOptions(
 case class RuleConfig(
     name: String,
     matchAscriptions: Option[Boolean],
+    lintMessage: Option[String],
     pattern: String,
     rewrite: Option[String]
 ) derives ConfigReader
@@ -25,13 +26,17 @@ case class Rule(
     name: String,
     pattern: Tree,
     rewrite: Option[Tree],
-    matchOptions: MatchOptions
+    matchOptions: MatchOptions,
+    lintMessage: Option[String]
 )
 
-case class LintMessage(t: Tree, r: String) extends Diagnostic {
+case class LintMessage(t: Tree, r: String, m: Option[String])
+    extends Diagnostic {
   override def position: Position = t.pos
   override def message: String =
-    s"Instance of parsed rule '$r' found at : \n${t.syntax}"
+    m match
+      case Some(msg) => s"[$r] $msg"
+      case None      => s"[$r] Rule matched."
 }
 
 class ParsedRule extends SemanticRule("ParsedRule"):
@@ -70,7 +75,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       val matchOptions = MatchOptions(
         matchAscriptions = rule.matchAscriptions.getOrElse(false)
       )
-      Rule(rule.name, matchTree, rewriteTree, matchOptions)
+      Rule(rule.name, matchTree, rewriteTree, matchOptions, rule.lintMessage)
     }
 
     ruleTrees
@@ -94,13 +99,13 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       doc.tree,
       { case t =>
         ruleTrees
-          .flatMap { case Rule(n, p, r, mo) =>
+          .flatMap { case Rule(n, p, r, mo, lm) =>
             val matcher = new Matcher()(using doc, mo)
             matcher.compareTrees(p, t, Matcher.Bindings.empty).map { bindings =>
               r match
                 case None =>
                   // Lint only
-                  Patch.lint(LintMessage(t, n))
+                  Patch.lint(LintMessage(t, n, lm))
                 case Some(r) =>
                   // Rewrite
                   val rewrittenTree = matcher.applyBindings(r, bindings)

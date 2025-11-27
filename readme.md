@@ -48,6 +48,46 @@ rules = [
 sbt scalafix
 ```
 
+### Using Parsed Rules Specifically
+
+On top of the steps above, you need to provide a configuration file named `.rules.conf` in the root of your project with the following structure:
+
+```hocon
+rules = [
+  {
+    name = "RuleName"
+    pattern = """
+      // pattern matching syntax
+    """
+    rewrite = """
+      // rewriting syntax
+    """
+  }
+  // additional rules...
+]
+```
+
+You need to add the following dependency to your `build.sbt` file to use Scalafmt:
+
+```scala
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
+```
+
+You also need to provide a `.scalafmt.conf` file in the root of your project. Scalafmt will be run before and after applying the rewrites to ensure proper formatting. A minimal configuration could be:
+
+```hocon
+version = 3.9.9
+runner.dialect = scala3
+```
+
+Optionally, if you need to test and modify your rules, disable scalafix caching in your `build.sbt` file:
+
+```scala
+scalafixCaching := false
+```
+
+This is because sbt task caching will avoid rerunning a task that has already been run with the same arguments and scala input files, but changes to the custom rules configuration file `.rules.conf` are not considered and would not trigger a re-run of scalafix.
+
 ### Running a Check on Student Submissions
 
 See script [check.sh](scripts/check.sh).

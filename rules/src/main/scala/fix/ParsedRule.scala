@@ -486,9 +486,9 @@ case class Matcher()(using
           case None      =>
             // No previous binding
             // Creating new one here is illegal (binding semantic info)
-            System.err.println(
-              s"Cannot bind $name to implicit type variable: no explicit type ascription found"
-            )
+            // System.err.println(
+            //   s"Cannot bind $name to implicit type variable: no explicit type ascription found"
+            // )
             return None
       case _ => patType
 

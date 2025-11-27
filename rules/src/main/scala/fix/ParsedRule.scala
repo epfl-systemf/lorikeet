@@ -216,6 +216,21 @@ case class Matcher()(using
                 // Pattern has no declared type - accept any candidate type
                 compareProducts(pat, cand, bindings, Set("decltpe"))
           case _ => None
+      case Defn.Var.After_4_7_2(mods, pats, decltpe, t) if !matchOptions.matchAscriptions =>
+        cand match
+          case Defn.Var(_, _, candDecltpe, _) =>
+            (decltpe, candDecltpe) match
+              case (Some(patTpe), Some(candTpe)) =>
+                compareProducts(pat, cand, bindings)
+              case (Some(tpe), None) =>
+                matchTreeSemTypeWithAscription(cand, tpe, bindings) match
+                  case Some(newBindings) =>
+                    compareProducts(pat, cand, newBindings, Set("decltpe"))
+                  case None => None
+              case (None, _) =>
+                // Pattern has no declared type - accept any candidate type
+                compareProducts(pat, cand, bindings, Set("decltpe"))
+          case _ => None
       case Term.Ascribe(t, tpe) if !matchOptions.matchAscriptions =>
         cand match
           case Term.Ascribe(candT, candTpe) =>

@@ -477,6 +477,9 @@ case class Matcher()(using
       case (TypeRef(_, candSymbol, Nil), Type.Name(patTypeName)) =>
         if (candSymbol.displayName == patTypeName) then Some(b)
         else None
+      // case (TypeRef(_, candSymbol, typeArgs), Type.Apply(Type.Name(patTypeName)), typeArgClause) =>
+      //   if (candSymbol.displayName == patTypeName) &&
+
       case _ =>
         System.err.println(
           s"Unsupported type comparison between candidate type ${candType.get} " +

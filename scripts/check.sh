@@ -13,17 +13,21 @@ TARGET_FILE="find.scala"
 TARGET_PATH="src/main/scala/find"
 # Log file to store results
 LOG_FILE="$ROOT/grading_log_$(date +%Y.%m.%d_%H.%M.%S).txt"
-# Directory to store the diffs between original (formatted) and refactored (formatted) code
+# Directory to store the diffs between original and refactored code
 DIFF_DIR="$ROOT/grading_diffs_$(date +%Y.%m.%d_%H.%M.%S)"
+# Directory to store clean, structured lint reports
+LINT_DIR="$ROOT/grading_reports_$(date +%Y.%m.%d_%H.%M.%S)"
 # Directory to store temporary files
 TMP_DIR="$ROOT/tmp"
 # ---------------------
 
 mkdir -p "$DIFF_DIR"
+mkdir -p "$LINT_DIR"
 mkdir -p "$TMP_DIR"
 
 echo "Starting automated checks. Log file: $LOG_FILE"
 echo "Refactoring diffs will be saved in: $DIFF_DIR"
+echo "Lint reports will be saved in: $LINT_DIR"
 echo "------------------------------------------------------" >> "$LOG_FILE"
 
 # --- SBT SERVER ---
@@ -55,17 +59,21 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
     let TOTAL_SUBMISSIONS++
 
     TARGET_FILE_PATH="$TARGET_PATH/$TARGET_FILE"
+    
     TMP_ORIGINAL="$TMP_DIR/$STUDENT_ID.$TARGET_FILE.original"
     TMP_REFACTORED="$TMP_DIR/$STUDENT_ID.$TARGET_FILE.refactored"
     DIFF_OUTPUT_FILE="$DIFF_DIR/$STUDENT_ID-$(basename "$LATEST_ATTEMPT_DIR").diff"
+    
+    TMP_RAW_LINT_OUTPUT="$TMP_DIR/$STUDENT_ID.$TARGET_FILE.raw_lint"
+    LINT_REPORT_FILE="$LINT_DIR/$STUDENT_ID-$(basename "$LATEST_ATTEMPT_DIR").lint.txt"
 
     cp "$SUBMISSION_FILE" "$LAB_DIR/$TARGET_PATH/"
     pushd "$LAB_DIR" > /dev/null
 
-    sbt --client "scalafmt" >> "$LOG_FILE" 2>&1
+    sbt --client -Dsbt.log.noformat=true "scalafmt" >> "$LOG_FILE" 2>&1
     cp "$TARGET_FILE_PATH" "$TMP_ORIGINAL"
 
-    sbt --client "compile" >> "$LOG_FILE" 2>&1
+    sbt --client -Dsbt.log.noformat=true "compile" >> "$LOG_FILE" 2>&1
     COMPILE_EXIT_CODE=$?
 
     if [ $COMPILE_EXIT_CODE -ne 0 ]; then
@@ -77,10 +85,19 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
         continue
     fi
     
-    sbt --client "scalafix" >> "$LOG_FILE" 2>&1
+    sbt --client -Dsbt.log.noformat=true "scalafix" > "$TMP_RAW_LINT_OUTPUT" 2>&1
     SCALAFIX_EXIT_CODE=$?
+    cat "$TMP_RAW_LINT_OUTPUT" >> "$LOG_FILE"
 
-    sbt --client "scalafmt" >> "$LOG_FILE" 2>&1
+    ESCAPED_ROOT=$(echo "$ROOT" | sed 's/[\/&]/\\&/g')
+    
+    grep "^\[error\]" "$TMP_RAW_LINT_OUTPUT" | \
+    grep -v "Total time" | \
+    grep -v "scalafix.sbt.ScalafixFailed" | \
+    sed "s#${ESCAPED_ROOT}/##" \
+    > "$LINT_REPORT_FILE"
+
+    sbt --client -Dsbt.log.noformat=true "scalafmt" >> "$LOG_FILE" 2>&1
     cp "$TARGET_FILE_PATH" "$TMP_REFACTORED"
 
     diff -u "$TMP_ORIGINAL" "$TMP_REFACTORED" > "$DIFF_OUTPUT_FILE"
@@ -95,6 +112,8 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
     rm $TARGET_FILE_PATH
     rm $TMP_ORIGINAL
     rm $TMP_REFACTORED
+    rm $TMP_RAW_LINT_OUTPUT
+    
     popd > /dev/null
 done
 

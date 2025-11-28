@@ -70,22 +70,25 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
     cp "$SUBMISSION_FILE" "$LAB_DIR/$TARGET_PATH/"
     pushd "$LAB_DIR" > /dev/null
 
-    sbt --client -Dsbt.log.noformat=true "scalafmt" >> "$LOG_FILE" 2>&1
-    cp "$TARGET_FILE_PATH" "$TMP_ORIGINAL"
-
+    # Compile to check for errors
     sbt --client -Dsbt.log.noformat=true "compile" >> "$LOG_FILE" 2>&1
     COMPILE_EXIT_CODE=$?
 
     if [ $COMPILE_EXIT_CODE -ne 0 ]; then
         echo "   -> ❌ ERROR:   $SUBMISSION_ID" | tee -a "$LOG_FILE"
         let COMPILE_ERROR_SUBMISSIONS++
-        rm $TARGET_FILE_PATH
-        rm $TMP_ORIGINAL
+        rm -f $TARGET_FILE_PATH
+        rm -f $TMP_ORIGINAL
         popd > /dev/null
         continue
     fi
+
+    # Initial Scalafmt to standardize formatting
+    sbt --client -Dsbt.log.noformat=true "scalafmt" >> "$LOG_FILE" 2>&1
+    cp "$TARGET_FILE_PATH" "$TMP_ORIGINAL"
     
-    sbt --client -Dsbt.log.noformat=true "scalafix" > "$TMP_RAW_LINT_OUTPUT" 2>&1
+    # Scalafix check to get full report
+    sbt --client -Dsbt.log.noformat=true "scalafix --check" > "$TMP_RAW_LINT_OUTPUT" 2>&1
     SCALAFIX_EXIT_CODE=$?
     cat "$TMP_RAW_LINT_OUTPUT" >> "$LOG_FILE"
 
@@ -97,10 +100,22 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
     sed "s#${ESCAPED_ROOT}/##" \
     > "$LINT_REPORT_FILE"
 
+    # Scalafix to apply fixes
+    sbt --client -Dsbt.log.noformat=true "scalafix" &> /dev/null
+
+    # Scalafmt to finalize formatting
     sbt --client -Dsbt.log.noformat=true "scalafmt" >> "$LOG_FILE" 2>&1
     cp "$TARGET_FILE_PATH" "$TMP_REFACTORED"
 
     diff -u "$TMP_ORIGINAL" "$TMP_REFACTORED" > "$DIFF_OUTPUT_FILE"
+
+    # Delete empty reports/diffs
+    if [ ! -s "$LINT_REPORT_FILE" ]; then
+        rm -f "$LINT_REPORT_FILE"
+    fi
+    if [ ! -s "$DIFF_OUTPUT_FILE" ]; then
+        rm -f "$DIFF_OUTPUT_FILE"
+    fi
     
     if [ $SCALAFIX_EXIT_CODE -ne 0 ]; then
         let RULE_MATCH_SUBMISSIONS++
@@ -109,10 +124,10 @@ for STUDENT_DIR in "$SUBMISSIONS_DIR"/*/; do
         echo "   -> ✅ SUCCESS: $SUBMISSION_ID" | tee -a "$LOG_FILE"
     fi
 
-    rm $TARGET_FILE_PATH
-    rm $TMP_ORIGINAL
-    rm $TMP_REFACTORED
-    rm $TMP_RAW_LINT_OUTPUT
+    rm -f $TARGET_FILE_PATH
+    rm -f $TMP_ORIGINAL
+    rm -f $TMP_REFACTORED
+    rm -f $TMP_RAW_LINT_OUTPUT
     
     popd > /dev/null
 done

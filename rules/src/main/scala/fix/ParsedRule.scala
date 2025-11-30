@@ -182,7 +182,10 @@ case class Matcher()(using
       case Term.Name(name) if name.startsWith("?") =>
         cand match
           case t: Term => bindings.checkAddTerm(name.stripPrefix("?"), t)
-          case _       => None
+          case p: Pat  =>
+            // Special handling due to special meaning of backticks in patterns
+            compareTrees(Pat.Var(Term.Name(name)), cand, bindings)
+          case _ => None
       case Type.Name(name) if name.startsWith("?") =>
         cand match
           case t: Type => bindings.checkAddType(name.stripPrefix("?"), t)
@@ -369,8 +372,87 @@ case class Matcher()(using
             case t: Term => newBindings.checkAddTerm(name, t)
             case _       => None
         }
+      case Term.ApplyInfix.After_4_6_0(
+            v,
+            Term.Name("including"),
+            Type.ArgClause(Nil),
+            Term.ArgClause(uses, _)
+          ) if uses.forall(isUsesPattern(_)) =>
+        matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
+          if checkUses(uses, candidate, newBindings) then Some(newBindings)
+          else None
+        }
       case _ =>
         throw new Exception(s"Unsupported pattern: ${pat.syntax}")
+
+  def isUsesPattern(
+      tree: Tree
+  ): Boolean =
+    tree match
+      case Term.Name(name)                                     => true
+      case Term.SelectPostfix(Lit.Int(times), Term.Name(name)) => true
+      case Term.SelectPostfix(
+            Term.Apply.After_4_6_0(
+              Term.Name("min" | "max"),
+              Term.ArgClause(List(Lit.Int(times)), _)
+            ),
+            Term.Name(name)
+          ) =>
+        true
+      case _ => false
+
+  def getNameBinding(
+      name: String,
+      bindings: Bindings
+  ): String =
+    if name.startsWith("?") then
+      bindings.terms.get(name.stripPrefix("?")) match
+        case Some(Term.Name(n)) => n
+        case Some(_) =>
+          throw new Exception(
+            s"Only simple name bindings are supported in 'uses' patterns: $name"
+          )
+        case None =>
+          throw new Exception(s"No binding found for name: $name")
+    else name
+
+  def checkUses(
+      uses: List[Tree],
+      candidate: Tree,
+      bindings: Bindings
+  ): Boolean =
+    uses.forall { use =>
+      use match
+        case Term.Name(name) =>
+          // At least one use
+          val trueName = getNameBinding(name, bindings)
+          candidate.collect {
+            case Term.Name(n) if n == trueName => n
+          }.nonEmpty
+        case Term.SelectPostfix(Lit.Int(times), Term.Name(name)) =>
+          // Exact number of uses
+          val trueName = getNameBinding(name, bindings)
+          val count = candidate.collect {
+            case Term.Name(n) if n == trueName => n
+          }.size
+          count == times
+        case Term.SelectPostfix(
+              Term.Apply.After_4_6_0(
+                Term.Name(bound @ ("min" | "max")),
+                Term.ArgClause(List(Lit.Int(times)), _)
+              ),
+              Term.Name(name)
+            ) =>
+          // Minimum or maximum number of uses
+          val trueName = getNameBinding(name, bindings)
+          val count = candidate.collect {
+            case Term.Name(n) if n == trueName => n
+          }.size
+          bound match
+            case "min" => count >= times
+            case "max" => count <= times
+        case _ => false
+    }
 
   def applyBindings(tree: Tree, bindings: Bindings): Tree =
     tree.transform {

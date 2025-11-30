@@ -16,4 +16,8 @@ class RuleSuite extends AbstractSemanticRuleSuite with AnyFunSuiteLike {
   }
 
   runAllTests()
+
+  // testsToRun.find(_.path.testName == "scala/fix/Including.scala").foreach { test =>
+  //   runOn(test)
+  // }
 }

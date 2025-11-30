@@ -14,3 +14,7 @@ object Including:
     x match
       case Some(v) => v.toString()
       case _       => "nah"
+
+    x match
+      case Some(1) => 1.toString()
+      case _       => "ok"

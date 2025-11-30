@@ -401,41 +401,33 @@ case class Matcher()(using
         true
       case _ => false
 
-  def getNameBinding(
-      name: String,
-      bindings: Bindings
-  ): String =
-    if name.startsWith("?") then
-      bindings.terms.get(name.stripPrefix("?")) match
-        case Some(Term.Name(n)) => n
-        case Some(_) =>
-          throw new Exception(
-            s"Only simple name bindings are supported in 'uses' patterns: $name"
-          )
-        case None =>
-          throw new Exception(s"No binding found for name: $name")
-    else name
-
   def checkUses(
       uses: List[Tree],
       candidate: Tree,
       bindings: Bindings
   ): Boolean =
+
+    def countUses(trueName: String): Int =
+      candidate.collect {
+        case Term.Name(n) if n == trueName => n
+      }.size
+
+    def getTrueName(name: String): Option[String] =
+      if name.startsWith("?") then
+        bindings.terms.get(name.stripPrefix("?")) match
+          case Some(Term.Name(n)) => Some(n)
+          case Some(_)            => None
+          case None => throw new Exception(s"No binding found for name: $name")
+      else Some(name)
+
     uses.forall { use =>
       use match
         case Term.Name(name) =>
           // At least one use
-          val trueName = getNameBinding(name, bindings)
-          candidate.collect {
-            case Term.Name(n) if n == trueName => n
-          }.nonEmpty
+          getTrueName(name).map(countUses).exists(_ > 0)
         case Term.SelectPostfix(Lit.Int(times), Term.Name(name)) =>
           // Exact number of uses
-          val trueName = getNameBinding(name, bindings)
-          val count = candidate.collect {
-            case Term.Name(n) if n == trueName => n
-          }.size
-          count == times
+          getTrueName(name).map(countUses).contains(times)
         case Term.SelectPostfix(
               Term.Apply.After_4_6_0(
                 Term.Name(bound @ ("min" | "max")),
@@ -444,13 +436,10 @@ case class Matcher()(using
               Term.Name(name)
             ) =>
           // Minimum or maximum number of uses
-          val trueName = getNameBinding(name, bindings)
-          val count = candidate.collect {
-            case Term.Name(n) if n == trueName => n
-          }.size
+          val useCount = getTrueName(name).map(countUses)
           bound match
-            case "min" => count >= times
-            case "max" => count <= times
+            case "min" => useCount.exists(_ >= times)
+            case "max" => useCount.exists(_ <= times)
         case _ => false
     }
 

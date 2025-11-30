@@ -50,7 +50,7 @@ sbt scalafix
 
 ### Using Parsed Rules Specifically
 
-On top of the steps above, you need to provide a configuration file named `.rules.conf` in the root of your project with the following structure:
+On top of the steps above, you need to provide a configuration file named `.rewriter.conf` in the root of your project with the following structure:
 
 ```hocon
 rules = [
@@ -86,7 +86,7 @@ Optionally, if you need to test and modify your rules, disable scalafix caching 
 scalafixCaching := false
 ```
 
-This is because sbt task caching will avoid rerunning a task that has already been run with the same arguments and scala input files, but changes to the custom rules configuration file `.rules.conf` are not considered and would not trigger a re-run of scalafix.
+This is because sbt task caching will avoid rerunning a task that has already been run with the same arguments and scala input files, but changes to the custom rules configuration file `.rewriter.conf` are not considered and would not trigger a re-run of scalafix.
 
 ### Running a Check on Student Submissions
 

@@ -42,7 +42,7 @@ case class LintMessage(t: Tree, r: String, m: Option[String])
 class ParsedRule extends SemanticRule("ParsedRule"):
   def parseRulesConfig(): List[Rule] =
     val configFile = sys.env.get("RULES_CONF") match
-      case None           => ".rules.conf"
+      case None           => ".rewriter.conf"
       case Some(filename) => filename
 
     val configResults: Either[ConfigReaderFailures, RulesConfig] =

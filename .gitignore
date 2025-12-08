@@ -1,3 +1,6 @@
+# scala-cli
+.scala-build
+
 # bloop and metals
 .bloop
 .bsp

@@ -25,7 +25,7 @@ inThisBuild(
   )
 )
 
-lazy val `custom-rules` = (project in file("."))
+lazy val `scala-rewrite` = (project in file("."))
   .aggregate(
     rules.projectRefs ++
       input.projectRefs ++
@@ -38,7 +38,7 @@ lazy val `custom-rules` = (project in file("."))
 
 lazy val rules = projectMatrix
   .settings(
-    moduleName := "custom-rules",
+    moduleName := "scala-rewrite",
     libraryDependencies += ("ch.epfl.scala" %% "scalafix-core" % "0.14.3")
       .cross(CrossVersion.for3Use2_13),
     libraryDependencies ++= Seq(

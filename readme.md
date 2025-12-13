@@ -11,7 +11,7 @@ sbt "tests / test"
 ### Publish Locally
 
 ```bash
-sbt "custom-rules / publishLocal"
+sbt "scala-rewrite / publishLocal"
 ```
 
 ## Usage
@@ -31,7 +31,7 @@ addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.4")
 semanticdbEnabled := true
 semanticdbVersion := scalafixSemanticdb.revision
 
-scalafixDependencies += "ch.epfl.sidoniebouthors" % "custom-rules_3" % "0.1.0-SNAPSHOT"
+scalafixDependencies += "ch.epfl.sidoniebouthors" % "scala-rewrite_3" % "0.1.0-SNAPSHOT"
 ```
 
 4. Create a `.scalafix.conf` file in the root of your project with the following content (where `CustomRule` is the name of the rule to run):

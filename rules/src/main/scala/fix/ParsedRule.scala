@@ -17,7 +17,7 @@ case class MatchOptions(
 case class RuleConfig(
     name: String,
     matchAscriptions: Option[Boolean],
-    lintMessage: Option[String],
+    description: Option[String],
     pattern: String,
     rewrite: Option[String]
 ) derives ConfigReader
@@ -27,7 +27,7 @@ case class Rule(
     pattern: Tree,
     rewrite: Option[Tree],
     matchOptions: MatchOptions,
-    lintMessage: Option[String]
+    description: Option[String]
 )
 
 case class LintMessage(t: Tree, r: String, m: Option[String])
@@ -39,7 +39,25 @@ case class LintMessage(t: Tree, r: String, m: Option[String])
       case None      => s"[$r] Rule matched."
 }
 
+enum LintLevel:
+  case Full
+  case Default
+  case None
+
 class ParsedRule extends SemanticRule("ParsedRule"):
+  def getLintLevel(): LintLevel =
+    sys.env.get("LINT_LEVEL") match
+      case Some(full) if full.toLowerCase == "full" => LintLevel.Full
+      case Some(none) if none.toLowerCase == "none" => LintLevel.None
+      case Some(default) if default.toLowerCase == "default" =>
+        LintLevel.Default
+      case None => LintLevel.Default
+      case Some(other) =>
+        System.err.println(
+          s"Unknown LINT_LEVEL value: $other. Using default level."
+        )
+        LintLevel.Default
+
   def parseRulesConfig(): List[Rule] =
     val configFile = sys.env.get("RULES_CONF") match
       case None           => ".rewriter.conf"
@@ -75,7 +93,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
       val matchOptions = MatchOptions(
         matchAscriptions = rule.matchAscriptions.getOrElse(false)
       )
-      Rule(rule.name, matchTree, rewriteTree, matchOptions, rule.lintMessage)
+      Rule(rule.name, matchTree, rewriteTree, matchOptions, rule.description)
     }
 
     ruleTrees
@@ -92,7 +110,7 @@ class ParsedRule extends SemanticRule("ParsedRule"):
     visit(tree)
 
   override def fix(implicit doc: SemanticDocument): Patch =
-
+    val lintLevel = getLintLevel()
     val ruleTrees = parseRulesConfig()
 
     val result = collectTopLevelMatches(
@@ -105,11 +123,15 @@ class ParsedRule extends SemanticRule("ParsedRule"):
               r match
                 case None =>
                   // Lint only
-                  Patch.lint(LintMessage(t, n, lm))
+                  if lintLevel == LintLevel.None then Patch.empty
+                  else Patch.lint(LintMessage(t, n, lm))
                 case Some(r) =>
                   // Rewrite
                   val rewrittenTree = matcher.applyBindings(r, bindings)
-                  Patch.replaceTree(t, rewrittenTree.syntax)
+                  Patch.replaceTree(t, rewrittenTree.syntax) +
+                    (if lintLevel == LintLevel.Full
+                     then Patch.lint(LintMessage(t, n, lm))
+                     else Patch.empty)
             }
           }
           .headOption

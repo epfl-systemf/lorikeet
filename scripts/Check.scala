@@ -1,3 +1,5 @@
+//> using scala 3.7.4
+
 import java.io.File
 import java.nio.file.{
   Files,
@@ -11,7 +13,7 @@ import java.time.format.DateTimeFormatter
 import scala.sys.process.{Process, ProcessLogger}
 import scala.jdk.CollectionConverters._
 import java.nio.charset.StandardCharsets
-import scala.collection.mutable.ArrayBuffer
+import scala.util.matching.Regex
 
 object CheckTool:
 
@@ -22,13 +24,16 @@ object CheckTool:
   case class MissingFiles(studentId: String, attempt: Int, files: Seq[String])
       extends CheckResult
   case class CompileError(studentId: String, attempt: Int) extends CheckResult
-  case class IssuesFound(studentId: String, attempt: Int) extends CheckResult
+  case class IssuesFound(
+      studentId: String,
+      attempt: Int,
+      issues: Map[String, Int]
+  ) extends CheckResult
   case class Success(studentId: String, attempt: Int) extends CheckResult
 
   case class Config(
       labDir: Path,
       submissionsDir: Path,
-      logFile: Path,
       diffDir: Path,
       lintDir: Path,
       tmpDir: Path,
@@ -49,7 +54,6 @@ object CheckTool:
 
     if (!Files.exists(submissionFile))
       return logAndReturn(
-        cfg.logFile,
         MissingFiles(studentId, attempt, Seq(cfg.targetFile))
       )
 
@@ -70,11 +74,11 @@ object CheckTool:
       )
 
       // Compile
-      if (!compile(cfg.labDir, cfg.logFile))
-        return logAndReturn(cfg.logFile, CompileError(studentId, attempt))
+      if (!compile(cfg.labDir))
+        return logAndReturn(CompileError(studentId, attempt))
 
       // Format and snapshot original
-      formatCode(cfg.labDir, cfg.logFile)
+      formatCode(cfg.labDir)
       Files.copy(
         targetFilePath,
         tmpOriginal,
@@ -82,13 +86,11 @@ object CheckTool:
       )
 
       // Linting check
-      val (lintCode, lintOut) = runScalafix(cfg.labDir, Seq("--check"))
-      logProcessOutput(cfg.logFile, lintOut)
-      processLintReport(lintOut, lintReport, cfg.labDir)
+      val (lintCode, lintOut) = runScalafix(cfg.labDir)
+      val rules = processLintReport(lintOut, lintReport, cfg.labDir)
 
       // Apply fixes, reformat
-      runScalafix(cfg.labDir, Seq())
-      formatCode(cfg.labDir, cfg.logFile)
+      formatCode(cfg.labDir)
       Files.copy(
         targetFilePath,
         tmpRefactored,
@@ -99,9 +101,10 @@ object CheckTool:
       val hasDiff = diff(tmpOriginal, tmpRefactored, diffOut).isDefined
 
       val issuesFound = Files.exists(lintReport) || hasDiff
-      if (issuesFound)
-        logAndReturn(cfg.logFile, IssuesFound(studentId, attempt))
-      else logAndReturn(cfg.logFile, Success(studentId, attempt))
+      if (issuesFound) then
+        val issueCounts = rules.groupBy(identity).view.mapValues(_.size).toMap
+        logAndReturn(IssuesFound(studentId, attempt, issueCounts))
+      else logAndReturn(Success(studentId, attempt))
 
     } catch {
       case e: Exception =>
@@ -117,57 +120,169 @@ object CheckTool:
     }
   }
 
-  def runScalafix(labDir: Path, args: Seq[String]): (Int, String) = {
+  def runScalafix(labDir: Path): (Int, String) = {
     val output = new StringBuilder
     val logger = ProcessLogger(
       (s: String) => output.append(s).append('\n'),
-      (e: String) =>
-        output.append(e).append('\n') // Capture errors in same buffer
+      (e: String) => output.append(e).append('\n')
     )
     val command =
-      Seq("sbt", "--client", "-Dsbt.log.noformat=true", "scalafix") ++ args
+      Seq(
+        "sbt",
+        "--client",
+        "-DLINT_LEVEL=full",
+        "scalafix"
+      )
     val exitCode = Process(command, labDir.toFile).!(logger)
     (exitCode, output.toString())
   }
 
-  def compile(labDir: Path, logFile: Path): Boolean = {
+  def compile(labDir: Path): Boolean = {
     val exitCode = execCommand(
       Seq("sbt", "--client", "-Dsbt.log.noformat=true", "compile"),
-      labDir,
-      Some(logFile)
+      labDir
     )
     exitCode == 0
   }
 
   def formatCode(
-      labDir: Path,
-      logFile: Path
+      labDir: Path
   ): Unit = {
     execCommand(
       Seq("sbt", "--client", "-Dsbt.log.noformat=true", "scalafmt"),
-      labDir,
-      Some(logFile)
+      labDir
     )
   }
 
-  def processLintReport(output: String, reportFile: Path, root: Path): Unit = {
-    val cleaned = output
-      .split('\n')
-      .filter(_.startsWith("[error]"))
-      .filterNot(s => s.contains("Total time") || s.contains("ScalafixFailed"))
-      .map(_.replace(root.toString + File.separator, ""))
-      .mkString("\n")
+  case class LintReportItem(
+      path: String,
+      line: Int,
+      col: Int,
+      ruleName: String,
+      message: String,
+      code: String
+  )
 
-    if (cleaned.nonEmpty)
-      Files.write(reportFile, cleaned.getBytes, StandardOpenOption.CREATE)
-    else Files.deleteIfExists(reportFile)
+  sealed trait LineType
+  case class ErrorHeader(
+      path: String,
+      line: Int,
+      col: Int,
+      ruleName: String,
+      message: String
+  ) extends LineType
+  case class CodeLine(code: String) extends LineType
+  case class PointerLine(pointer: String) extends LineType
+  case object OtherLine extends LineType
+
+  private val ErrorHeaderPattern: Regex =
+    """\[error\]\s+(\S+):(\d+):(\d+):\s+error:\s+\[ParsedRule\]\s+\[(.*?)\]\s+(.*)""".r
+  private val CodeLinePattern: Regex =
+    """\[error\](\s*.*)""".r
+  private val PointerLinePattern: Regex =
+    """\[error\](\s*\^+)""".r
+
+  private def getLineType(line: String, rootPrefix: String): LineType = {
+    line.replace(rootPrefix, "") match {
+      case ErrorHeaderPattern(path, lineNum, colNum, ruleName, message) =>
+        ErrorHeader(path, lineNum.toInt, colNum.toInt, ruleName, message.trim)
+      case PointerLinePattern(pointer) =>
+        PointerLine(pointer)
+      case CodeLinePattern(code) =>
+        CodeLine(code)
+      case _ =>
+        OtherLine
+    }
   }
 
-  def logProcessOutput(logFile: Path, out: String): Unit =
-    Files.write(logFile, (out + "\n").getBytes, StandardOpenOption.APPEND)
+  case class IssueDetail(
+      ruleName: String,
+      message: String,
+      path: String,
+      line: Int,
+      col: Int,
+      codeLine: String,
+      pointerLine: String
+  )
+
+  def processLintReport(
+      output: String,
+      reportFile: Path,
+      root: Path
+  ): Seq[String] = {
+    val rootPrefix = root.toString + File.separator
+    val lines = output
+      .replaceAll("\\e\\[[\\d;]*[^\\d;]", "") // Remove ANSI codes
+      .split('\n')
+      .filter(_.startsWith("[error]"))
+      .map(line => getLineType(line, rootPrefix))
+      .zipWithIndex
+
+    val issueBlock: Seq[IssueDetail] = lines.flatMap {
+      case (header @ ErrorHeader(path, line, col, ruleName, message), i) =>
+        val codeLine =
+          lines
+            .drop(i + 1)
+            .headOption
+            .collect { case (CodeLine(code), _) => code }
+            .getOrElse("")
+        val pointerLine =
+          lines
+            .drop(i + 2)
+            .headOption
+            .collect { case (PointerLine(pointer), _) => pointer }
+            .getOrElse("")
+
+        Some(
+          IssueDetail(
+            ruleName,
+            message,
+            path,
+            line,
+            col,
+            codeLine,
+            pointerLine
+          )
+        )
+      case _ =>
+        None
+    }
+
+    val foundRules = issueBlock.map(_.ruleName)
+
+    val report = issueBlock
+      .groupBy( // rule name and message
+        issue => (issue.ruleName, issue.message)
+      )
+      .map { case ((ruleName, message), issues) =>
+        val reportBlock = new StringBuilder
+        reportBlock.append(
+          s"[${ruleName}]\n${message} (${issues.length} occurrences)\n\n"
+        )
+        issues.foreach { issue =>
+          reportBlock.append(s"${issue.path}:${issue.line}:${issue.col}\n")
+          reportBlock.append(s"${issue.codeLine}\n")
+          if (issue.pointerLine.nonEmpty) {
+            reportBlock.append(s"${issue.pointerLine}\n")
+          }
+        }
+        reportBlock.toString()
+      }
+      .toSeq
+      .mkString("\n")
+
+    if (report.nonEmpty)
+      Files.write(
+        reportFile,
+        report.getBytes,
+        StandardOpenOption.CREATE
+      )
+    else Files.deleteIfExists(reportFile)
+
+    foundRules
+  }
 
   def logAndReturn(
-      logFile: Path,
       result: CheckResult
   ): CheckResult = {
     val logMsg = result match {
@@ -177,13 +292,14 @@ object CheckTool:
         s"   -> ❓ MISSING FILES: $studentId / $attempt -> ${files.mkString(", ")}\n"
       case CompileError(studentId, attempt) =>
         s"   -> ❌ ERROR:   $studentId / $attempt\n"
-      case IssuesFound(studentId, attempt) =>
-        s"   -> ⚠️  ISSUES:  $studentId / $attempt\n"
+      case IssuesFound(studentId, attempt, issues) =>
+        s"   -> ⚠️  ISSUES:  $studentId / $attempt -> ${issues
+            .map { case (rule, count) => s"$rule ($count)" }
+            .mkString(", ")}\n"
       case Success(studentId, attempt) =>
         s"   -> ✅ SUCCESS: $studentId / $attempt\n"
     }
     println(logMsg.trim)
-    Files.write(logFile, logMsg.getBytes, StandardOpenOption.APPEND)
     result
   }
 
@@ -211,17 +327,22 @@ object CheckTool:
       refactoredFile: Path,
       diffOutputFile: Path
   ): Option[String] = {
-    val diffLines = ArrayBuffer[String]()
+    val output = new StringBuilder
     Process(
       Seq("diff", "-u", originalFile.toString, refactoredFile.toString)
     ).!(
-      ProcessLogger(s => diffLines += s, s => System.err.println(s))
+      ProcessLogger(
+        s => output.append(s).append('\n'),
+        s => System.err.println(s)
+      )
     )
 
-    if (diffLines.nonEmpty) {
+    val diffOutput = output.toString().trim
+
+    if (diffOutput.nonEmpty) {
       Files.write(
         diffOutputFile,
-        diffLines.mkString("\n").getBytes(StandardCharsets.UTF_8),
+        diffOutput.getBytes(StandardCharsets.UTF_8),
         StandardOpenOption.CREATE
       )
       Some(diffOutputFile.toString)
@@ -233,7 +354,6 @@ object CheckTool:
   def execCommand(
       command: Seq[String],
       cwd: Path,
-      outputStream: Option[Path] = None,
       printOutput: Boolean = false
   ): Int = {
     val logger = new StringBuilder
@@ -260,15 +380,6 @@ object CheckTool:
           -1
       }
 
-    outputStream.foreach { logPath =>
-      Files.write(
-        logPath,
-        (logger.toString + "\n").getBytes(StandardCharsets.UTF_8),
-        StandardOpenOption.APPEND,
-        StandardOpenOption.CREATE
-      )
-    }
-
     exitCode
   }
 
@@ -289,7 +400,6 @@ object CheckTool:
     val cfg = Config(
       labDir = ROOT.resolve(LAB_DIR_NAME),
       submissionsDir = ROOT.resolve(SUBMISSIONS_DIR_NAME),
-      logFile = ROOT.resolve(s"grading_log_$timestamp.txt"),
       diffDir = ROOT.resolve(s"grading_diffs_$timestamp"),
       lintDir = ROOT.resolve(s"grading_reports_$timestamp"),
       tmpDir = ROOT.resolve("tmp"),
@@ -303,28 +413,9 @@ object CheckTool:
       cfg.tmpDir
     ).foreach(x => Files.createDirectories(x))
 
-    println(s"Logging to file: ${cfg.logFile}\n")
     println(s"Diffs directory: ${cfg.diffDir}")
     println(s"Lint reports directory: ${cfg.lintDir}\n")
-
-    Files.write(
-      cfg.logFile,
-      "------------------------------------------------------\n".getBytes,
-      StandardOpenOption.APPEND,
-      StandardOpenOption.CREATE
-    )
-
-    val sbtProcess = Process(Seq("sbt", "compile"), cfg.labDir.toFile)
-      .run(ProcessLogger(_ => ()))
-    Runtime.getRuntime.addShutdownHook(
-      new Thread {
-        override def run(): Unit = {
-          sbtProcess.destroy()
-          Files.deleteIfExists(cfg.tmpDir)
-        }
-      }
-    )
-    Thread.sleep(10000)
+    println("Starting grading process...\n")
 
     val studentDirs = Files
       .list(cfg.submissionsDir)
@@ -346,8 +437,8 @@ object CheckTool:
       case _                  => false
     }
     val RULE_MATCH_SUBMISSIONS = results.count {
-      case IssuesFound(_, _) => true
-      case _                 => false
+      case IssuesFound(_, _, _) => true
+      case _                    => false
     }
 
     println("\n--- SUMMARY ---")
@@ -358,9 +449,37 @@ Submissions failing check (issues found): $RULE_MATCH_SUBMISSIONS
 -------------------------------------------------------
 """
     println(summary)
-    Files.write(cfg.logFile, summary.getBytes, StandardOpenOption.APPEND)
 
-    println(s"Grading complete. Final results summary in ${cfg.logFile}")
+    val globalMatches = results
+      .collect { case IssuesFound(_, _, issues) =>
+        issues
+      }
+      .flatMap(_.toSeq)
+      .groupMapReduce(_._1)(_._2)(_ + _)
+      .toSeq
+      .sortBy(-_._2)
 
-    sbtProcess.destroy()
+    val studentMatches = results
+      .collect { case IssuesFound(studentId, _, issues) =>
+        issues.map(_._1)
+      }
+      .flatten
+      .groupBy(identity)
+      .mapValues(_.size)
+      .toSeq
+      .sortBy(-_._2)
+
+    val detailedReport = new StringBuilder
+    detailedReport.append("\n--- DETAILED RULE MATCHES SUMMARY ---\n")
+    detailedReport.append("\nGlobal Rule Matches:\n")
+    globalMatches.foreach { case (rule, count) =>
+      detailedReport.append(f"  $rule: $count\n")
+    }
+    detailedReport.append("\nStudent Matches:\n")
+    studentMatches.foreach { case (rule, count) =>
+      detailedReport.append(f"  $rule: $count\n")
+    }
+    println(detailedReport.toString())
+
+    println(s"Grading complete.")
   }

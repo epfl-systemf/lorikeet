@@ -214,6 +214,7 @@ object CheckTool:
     val lines = output
       .replaceAll("\\e\\[[\\d;]*[^\\d;]", "") // Remove ANSI codes
       .split('\n')
+      .toSeq
       .filter(_.startsWith("[error]"))
       .map(line => getLineType(line, rootPrefix))
       .zipWithIndex
@@ -427,28 +428,19 @@ object CheckTool:
     val results: Seq[CheckResult] =
       studentDirs.map(dir => checkStudent(dir, cfg))
 
-    val TOTAL_SUBMISSIONS = results.length
-    val MISSING_FILE_SUBMISSIONS = results.count {
+    val totalSubmissions = results.length
+    val missingFiles = results.count {
       case MissingFiles(_, _, _) => true
       case _                     => false
     }
-    val COMPILE_ERROR_SUBMISSIONS = results.count {
+    val compileErrors = results.count {
       case CompileError(_, _) => true
       case _                  => false
     }
-    val RULE_MATCH_SUBMISSIONS = results.count {
+    val ruleMatches = results.count {
       case IssuesFound(_, _, _) => true
       case _                    => false
     }
-
-    println("\n--- SUMMARY ---")
-    val summary = s"""Total submissions: $TOTAL_SUBMISSIONS
-Submissions with missing file: $MISSING_FILE_SUBMISSIONS
-Submissions with compile errors: $COMPILE_ERROR_SUBMISSIONS
-Submissions failing check (issues found): $RULE_MATCH_SUBMISSIONS
--------------------------------------------------------
-"""
-    println(summary)
 
     val globalMatches = results
       .collect { case IssuesFound(_, _, issues) =>
@@ -464,22 +456,27 @@ Submissions failing check (issues found): $RULE_MATCH_SUBMISSIONS
         issues.map(_._1)
       }
       .flatten
-      .groupBy(identity)
-      .mapValues(_.size)
+      .groupMapReduce(identity)(_ => 1)(_ + _)
       .toSeq
       .sortBy(-_._2)
 
-    val detailedReport = new StringBuilder
-    detailedReport.append("\n--- DETAILED RULE MATCHES SUMMARY ---\n")
-    detailedReport.append("\nGlobal Rule Matches:\n")
-    globalMatches.foreach { case (rule, count) =>
-      detailedReport.append(f"  $rule: $count\n")
-    }
-    detailedReport.append("\nStudent Matches:\n")
-    studentMatches.foreach { case (rule, count) =>
-      detailedReport.append(f"  $rule: $count\n")
-    }
-    println(detailedReport.toString())
+    println("\n--- SUMMARY ---")
+    val summary = s"""Total submissions: $totalSubmissions
+Submissions with missing file: $missingFiles
+Submissions with compile errors: $compileErrors
+Submissions failing check: $ruleMatches
+"""
+    println(summary)
 
-    println(s"Grading complete.")
+    println("--- STATISTICS ---")
+    println("Submissions with Matches:")
+    studentMatches.foreach { case (rule, count) =>
+      println(f"  $rule: $count")
+    }
+    println("Total Rule Matches:")
+    globalMatches.foreach { case (rule, count) =>
+      println(f"  $rule: $count")
+    }
+
+    println(s"\nGrading complete.")
   }

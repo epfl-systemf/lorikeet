@@ -93,7 +93,7 @@ object SemanticTypeMatching:
     patType match
       case Type.Name("?") => PatternTypeResolution.Wildcard
       case Type.Name(name) if name.startsWith("?") =>
-        bindings.types.get(name.stripPrefix("?")) match
+        bindings.getType(name.stripPrefix("?")) match
           case Some(tpe) => PatternTypeResolution.Resolved(tpe)
           case None      => PatternTypeResolution.UnboundVariable(name)
       case _ =>

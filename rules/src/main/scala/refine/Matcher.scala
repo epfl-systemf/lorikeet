@@ -256,7 +256,7 @@ case class Matcher()(using
 
     def getTrueName(name: String): Option[String] =
       if name.startsWith("?") then
-        bindings.terms.get(name.stripPrefix("?")) match
+        bindings.getTerm(name.stripPrefix("?")) match
           case Some(Term.Name(n)) => Some(n)
           case Some(_)            => None
           case None => throw new Exception(s"No binding found for name: $name")

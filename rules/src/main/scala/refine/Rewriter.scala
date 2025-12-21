@@ -29,17 +29,17 @@ case class Rewriter()(using
             Term.Name("?"),
             Term.ArgClause(List(Term.Block(List(Term.Name(name)))), _)
           ) =>
-        bindings.terms.get(name) match
+        bindings.getTerm(name) match
           case Some(t) => Some(t)
           case None =>
             throw new Exception(s"No binding found for name: $name")
       case Term.Name(name) if name.startsWith("?") =>
-        bindings.terms.get(name.stripPrefix("?")) match
+        bindings.getTerm(name.stripPrefix("?")) match
           case Some(t) => Some(t)
           case None =>
             throw new Exception(s"No binding found for name: $name")
       case Type.Name(name) if name.startsWith("?") =>
-        bindings.types.get(name.stripPrefix("?")) match
+        bindings.getType(name.stripPrefix("?")) match
           case Some(t) => Some(t)
           case None =>
             throw new Exception(s"No binding found for type name: $name")

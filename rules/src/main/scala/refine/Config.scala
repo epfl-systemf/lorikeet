@@ -1,4 +1,4 @@
-package parsedRule
+package refine
 
 import scala.meta._
 import scala.meta.dialects.Scala3

@@ -1,4 +1,4 @@
-package parsedRule
+package refine
 
 import scala.meta._
 

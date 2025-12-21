@@ -1,47 +1,15 @@
-package parsedRule
+package refine
 
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
 
-object Matcher:
-  object Bindings {
-    val empty: Bindings = Bindings(Map.empty, Map.empty)
-    def sameBinding(t1: Tree, t2: Tree)(using
-        doc: SemanticDocument
-    ): Boolean =
-      (t1.symbol, t2.symbol) match
-        case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
-        case (s1, s2) => s1 == s2 && t1.structure == t2.structure
-  }
-  case class Bindings(
-      terms: Map[String, Tree],
-      types: Map[String, Type]
-  ):
-    import Bindings.sameBinding
-    def checkAddTerm(name: String, term: Term)(using
-        doc: SemanticDocument
-    ): Option[Bindings] =
-      terms.get(name) match
-        case Some(t) if sameBinding(t, term) => Some(this)
-        case Some(x)                         => None
-        case None => Some(this.copy(terms = terms + (name -> term)))
-
-    def checkAddType(name: String, tpe: Type)(using
-        doc: SemanticDocument
-    ): Option[Bindings] =
-      types.get(name) match
-        case Some(t) if sameBinding(t, tpe) => Some(this)
-        case Some(x)                        => None
-        case None => Some(this.copy(types = types + (name -> tpe)))
-
-  type MatchResult = Option[Bindings]
+type MatchResult = Option[Bindings]
 
 case class Matcher()(using
     doc: SemanticDocument,
     matchOptions: MatchOptions
 ):
-  import Matcher._
 
   def compareTrees(
       pat: Tree,

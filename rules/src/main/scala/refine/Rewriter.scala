@@ -1,9 +1,8 @@
-package parsedRule
+package refine
 
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
-import parsedRule.Matcher.Bindings
 
 case class Rewriter()(using
     doc: SemanticDocument,

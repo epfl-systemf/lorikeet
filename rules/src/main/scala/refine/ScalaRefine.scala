@@ -1,4 +1,4 @@
-package parsedRule
+package refine
 
 import scalafix.v1._
 import scala.meta._
@@ -31,7 +31,7 @@ case class LintMessage(t: Tree, r: String, m: Option[String])
       case None      => s"[$r] Rule matched."
 }
 
-class ScalaRewrite extends SemanticRule("ParsedRule"):
+class ScalaRefine extends SemanticRule("ParsedRule"):
 
   def collectTopLevelMatches(
       tree: Tree,
@@ -55,7 +55,7 @@ class ScalaRewrite extends SemanticRule("ParsedRule"):
           .flatMap { case CustomRule(n, p, r, mo, lm) =>
             val matcher = Matcher()(using doc, mo)
             val rewriter = Rewriter()(using doc, mo)
-            matcher.compareTrees(p, t, Matcher.Bindings.empty).map { bindings =>
+            matcher.compareTrees(p, t, Bindings.empty).map { bindings =>
               r match
                 case None =>
                   // Lint only

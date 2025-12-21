@@ -50,31 +50,17 @@ case class Matcher()(using
       bindings: Bindings
   ): MatchResult =
     pat match
-      // Special handling for particular constructs
-      case Term.Apply.After_4_6_0(
-            Term.Name("?"),
-            Term.ArgClause(List(Term.Block(List(arg))), _)
-          ) =>
-        matchWithPattern(arg, cand, bindings)
-      case Term.AnonymousFunction(
-            Term.Apply.After_4_6_0(
-              Term.Name("?"),
-              Term.ArgClause(List(Term.Block(List(arg))), _)
-            )
-          ) =>
-        matchWithPattern(arg, cand, bindings)
+      case Syntax.PatternBlock(pattern) =>
+        matchWithPattern(pattern, cand, bindings)
       // Wildcard + binding for symbols
-      case Term.Name(name) if name.startsWith("?") =>
-        cand match
-          case t: Term => bindings.checkAddTerm(name.stripPrefix("?"), t)
-          case p: Pat  =>
+      case Syntax.SymbolBind(name) =>
+        (pat, cand) match
+          case (_: Term, t: Term) => bindings.checkAddTerm(name, t)
+          case (_: Type, t: Type) => bindings.checkAddType(name, t)
+          case (_: Term, p: Pat)  =>
             // Special handling due to special meaning of backticks in patterns
-            compareTrees(Pat.Var(Term.Name(name)), cand, bindings)
+            compareTrees(Pat.Var(Term.Name("?" + name)), cand, bindings)
           case _ => None
-      case Type.Name(name) if name.startsWith("?") =>
-        cand match
-          case t: Type => bindings.checkAddType(name.stripPrefix("?"), t)
-          case _       => None
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead
@@ -112,7 +98,7 @@ case class Matcher()(using
       case Defn.Var.After_4_7_2(mods, pats, decltpe, t)
           if !matchOptions.matchAscriptions =>
         cand match
-          case Defn.Var(_, _, candDecltpe, _) =>
+          case Defn.Var.After_4_7_2(_, _, candDecltpe, _) =>
             (decltpe, candDecltpe) match
               case (Some(patTpe), Some(candTpe)) =>
                 compareProducts(pat, cand, bindings)

@@ -1,6 +1,5 @@
 package parsedRule
 
-import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
 import scala.io.Source._

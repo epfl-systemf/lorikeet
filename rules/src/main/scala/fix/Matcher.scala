@@ -17,7 +17,7 @@ object Matcher:
   case class Bindings(
       terms: Map[String, Tree],
       types: Map[String, Type]
-  ) {
+  ):
     import Bindings.sameBinding
     def checkAddTerm(name: String, term: Term)(using
         doc: SemanticDocument
@@ -34,7 +34,6 @@ object Matcher:
         case Some(t) if sameBinding(t, tpe) => Some(this)
         case Some(x)                        => None
         case None => Some(this.copy(types = types + (name -> tpe)))
-  }
 
   type MatchResult = Option[Bindings]
 
@@ -116,7 +115,7 @@ case class Matcher()(using
         compareProducts(pat, cand, bindings)
       case (Some(tpe), None) =>
         // Pattern has type, candidate doesn't - use semantic matching
-        matchTreeSemTypeWithAscription(cand, tpe, bindings).flatMap {
+        SemanticTypeMatching.matchTreeType(cand, tpe, bindings).flatMap {
           newBindings =>
             compareProducts(pat, cand, newBindings, Set(typeFieldName))
         }
@@ -147,7 +146,8 @@ case class Matcher()(using
                 case (Some(patTpe), Some(_)) =>
                   compareProducts(patParam, candParam, b)
                 case (Some(tpe), None) =>
-                  matchTreeSemTypeWithAscription(candParam, tpe, b)
+                  SemanticTypeMatching
+                    .matchTreeType(candParam, tpe, b)
                     .flatMap(newBindings =>
                       compareProducts(
                         patParam,
@@ -316,62 +316,3 @@ case class Matcher()(using
             case "max" => useCount.exists(_ <= times)
         case _ => false
     }
-
-  def getSymbolType(t: Tree): Option[SemanticType] =
-    t.symbol.info match
-      case Some(info) =>
-        info.signature match
-          case s: ValueSignature =>
-            Some(s.tpe)
-          case s: MethodSignature =>
-            Some(s.returnType)
-          case _ =>
-            System.err.println(
-              "Unsupported signature type for tree: " + t.syntax
-            )
-            None
-      case _ =>
-        System.err.println("No symbol info found for tree: " + t.syntax)
-        None
-
-  def matchTreeSemTypeWithAscription(
-      cand: Tree,
-      patType: Type,
-      b: Bindings
-  ): MatchResult =
-    // Get the semanticdb type of candidate tree
-    // Compare with the pattern type, considering bindings
-    val candType = getSymbolType(cand)
-
-    // No type info for candidate
-    if (candType.isEmpty) then return None
-
-    val patTrueType = patType match
-      case Type.Name("?") =>
-        // Wildcard - accept any candidate type
-        return Some(b)
-      case Type.Name(name) if name.startsWith("?") =>
-        b.types.get(name.stripPrefix("?")) match
-          case Some(tpe) => tpe
-          case None      =>
-            // No previous binding
-            // Creating new one here is illegal (binding semantic info)
-            // System.err.println(
-            //   s"Cannot bind $name to implicit type variable: no explicit type ascription found"
-            // )
-            return None
-      case _ => patType
-
-    (candType.get, patTrueType) match
-      case (TypeRef(_, candSymbol, Nil), Type.Name(patTypeName)) =>
-        if (candSymbol.displayName == patTypeName) then Some(b)
-        else None
-      // case (TypeRef(_, candSymbol, typeArgs), Type.Apply(Type.Name(patTypeName)), typeArgClause) =>
-      //   if (candSymbol.displayName == patTypeName) &&
-
-      case _ =>
-        System.err.println(
-          s"Unsupported type comparison between candidate type ${candType.get} " +
-            s"and pattern type ${patType} (${patTrueType})"
-        )
-        None

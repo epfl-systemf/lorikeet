@@ -64,108 +64,111 @@ case class Matcher()(using
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead
-      case Defn.Def.After_4_7_3(mods, name, params, decltpe, body)
+      case Syntax.WithOptionalType(_, patType, typeField)
           if !matchOptions.matchAscriptions =>
         cand match
-          case Defn.Def.After_4_7_3(_, _, _, candDecltpe, _) =>
-            (decltpe, candDecltpe) match
-              case (Some(patTpe), Some(candTpe)) =>
-                compareProducts(pat, cand, bindings)
-              case (Some(tpe), None) =>
-                matchTreeSemTypeWithAscription(cand, tpe, bindings) match
-                  case Some(newBindings) =>
-                    compareProducts(pat, cand, newBindings, Set("decltpe"))
-                  case None => None
-              case (None, _) =>
-                // Pattern has no declared type - accept any candidate type
-                compareProducts(pat, cand, bindings, Set("decltpe"))
+          case Syntax.WithOptionalType(_, candType, _) =>
+            compareWithOptionalAscription(
+              pat,
+              cand,
+              bindings,
+              patType,
+              candType,
+              typeField
+            )
           case _ => None
-      case Defn.Val(mods, pats, decltpe, t) if !matchOptions.matchAscriptions =>
+      case Syntax.FunctionWithOptionalParamTypes(
+            Term.ParamClause(patParams, patParamMods),
+            _
+          ) if !matchOptions.matchAscriptions =>
         cand match
-          case Defn.Val(_, _, candDecltpe, _) =>
-            (decltpe, candDecltpe) match
-              case (Some(patTpe), Some(candTpe)) =>
-                compareProducts(pat, cand, bindings)
-              case (Some(tpe), None) =>
-                matchTreeSemTypeWithAscription(cand, tpe, bindings) match
-                  case Some(newBindings) =>
-                    compareProducts(pat, cand, newBindings, Set("decltpe"))
-                  case None => None
-              case (None, _) =>
-                // Pattern has no declared type - accept any candidate type
-                compareProducts(pat, cand, bindings, Set("decltpe"))
-          case _ => None
-      case Defn.Var.After_4_7_2(mods, pats, decltpe, t)
-          if !matchOptions.matchAscriptions =>
-        cand match
-          case Defn.Var.After_4_7_2(_, _, candDecltpe, _) =>
-            (decltpe, candDecltpe) match
-              case (Some(patTpe), Some(candTpe)) =>
-                compareProducts(pat, cand, bindings)
-              case (Some(tpe), None) =>
-                matchTreeSemTypeWithAscription(cand, tpe, bindings) match
-                  case Some(newBindings) =>
-                    compareProducts(pat, cand, newBindings, Set("decltpe"))
-                  case None => None
-              case (None, _) =>
-                // Pattern has no declared type - accept any candidate type
-                compareProducts(pat, cand, bindings, Set("decltpe"))
-          case _ => None
-      case Term.Ascribe(t, tpe) if !matchOptions.matchAscriptions =>
-        cand match
-          case Term.Ascribe(candT, candTpe) =>
-            // Candidate is also an ascription - compare exactly
-            compareProducts(pat, cand, bindings)
-          case _ =>
-            // Candidate is not an ascription - match type semantically
-            matchTreeSemTypeWithAscription(cand, tpe, bindings) match
-              case Some(newBindings) =>
-                compareProducts(pat, cand, newBindings, Set("tpe"))
-              case None => None
-      case Term.Function
-            .After_4_6_0(Term.ParamClause(patParams, patParamMods), body)
-          if !matchOptions.matchAscriptions =>
-        cand match
-          case Term.Function.After_4_6_0(
+          case Syntax.FunctionWithOptionalParamTypes(
                 Term.ParamClause(candParams, candParamMods),
-                body
+                _
               ) =>
-            // Compare parameters (with semantic type matching)
-            val paramsMatch =
-              if patParams.size != candParams.size then None
-              else
-                patParams
-                  .zip(candParams)
-                  .foldLeft[MatchResult](Some(bindings)) {
-                    case (Some(b), (patParam, candParam)) =>
-                      (patParam.decltpe, candParam.decltpe) match
-                        case (Some(patTpe), Some(candTpe)) =>
-                          compareProducts(patParam, candParam, b)
-                        case (Some(tpe), None) =>
-                          matchTreeSemTypeWithAscription(candParam, tpe, b)
-                            .flatMap(newBindings =>
-                              compareProducts(
-                                patParam,
-                                candParam,
-                                newBindings,
-                                Set("decltpe")
-                              )
-                            )
-                        case (None, _) => Some(b)
-                    case (None, _) => None
-                  }
-            paramsMatch
-              .flatMap(newBindings =>
-                // Compare parameter modifiers
-                compareFields(patParamMods, candParamMods, newBindings)
-              )
-              .flatMap(newBindings =>
-                // Compare body
-                compareProducts(pat, cand, newBindings, Set("paramClause"))
-              )
+            compareFunctionWithSemanticTypes(
+              pat,
+              cand,
+              bindings,
+              patParams,
+              candParams,
+              patParamMods,
+              candParamMods
+            )
           case _ => None
       // General case
       case _ => compareProducts(pat, cand, bindings)
+
+  /** Handle optional type ascriptions with semantic type matching when pattern
+    * has type but candidate doesn't
+    */
+  private def compareWithOptionalAscription(
+      pat: Tree,
+      cand: Tree,
+      bindings: Bindings,
+      patType: Option[Type],
+      candType: Option[Type],
+      typeFieldName: String
+  ): MatchResult =
+    (patType, candType) match
+      case (Some(patTpe), Some(_)) =>
+        // Both have explicit types - compare structurally
+        compareProducts(pat, cand, bindings)
+      case (Some(tpe), None) =>
+        // Pattern has type, candidate doesn't - use semantic matching
+        matchTreeSemTypeWithAscription(cand, tpe, bindings).flatMap {
+          newBindings =>
+            compareProducts(pat, cand, newBindings, Set(typeFieldName))
+        }
+      case (None, _) =>
+        // Pattern has no type - accept any candidate type
+        compareProducts(pat, cand, bindings, Set(typeFieldName))
+
+  /** Compare function parameters with semantic type matching
+    */
+  private def compareFunctionWithSemanticTypes(
+      pat: Tree,
+      cand: Tree,
+      bindings: Bindings,
+      patParams: List[Term.Param],
+      candParams: List[Term.Param],
+      patParamMods: Option[Mod],
+      candParamMods: Option[Mod]
+  ): MatchResult =
+    // Compare parameters (with semantic type matching)
+    val paramsMatch =
+      if patParams.size != candParams.size then None
+      else
+        patParams
+          .zip(candParams)
+          .foldLeft[MatchResult](Some(bindings)) {
+            case (Some(b), (patParam, candParam)) =>
+              (patParam.decltpe, candParam.decltpe) match
+                case (Some(patTpe), Some(_)) =>
+                  compareProducts(patParam, candParam, b)
+                case (Some(tpe), None) =>
+                  matchTreeSemTypeWithAscription(candParam, tpe, b)
+                    .flatMap(newBindings =>
+                      compareProducts(
+                        patParam,
+                        candParam,
+                        newBindings,
+                        Set("decltpe")
+                      )
+                    )
+                case (None, _) =>
+                  compareProducts(patParam, candParam, b, Set("decltpe"))
+            case (None, _) => None
+          }
+    paramsMatch
+      .flatMap(newBindings =>
+        // Compare parameter modifiers
+        compareFields(patParamMods, candParamMods, newBindings)
+      )
+      .flatMap(newBindings =>
+        // Compare body
+        compareProducts(pat, cand, newBindings, Set("paramClause"))
+      )
 
   def compareProducts(
       pat: Product,

@@ -189,37 +189,21 @@ case class Matcher()(using
       bindings: Bindings
   ): MatchResult =
     pat match
-      case Term.ApplyUnary(Term.Name("+"), arg) =>
+      case Syntax.InPattern.Escape(arg) =>
         compareTrees(arg, candidate, bindings)
-      case Term.ApplyInfix.After_4_6_0(
-            a,
-            Term.Name("|"),
-            Type.ArgClause(Nil),
-            Term.ArgClause(List(b), _)
-          ) =>
+      case Syntax.InPattern.Alternative(a, b) =>
         matchWithPattern(a, candidate, bindings) match
           case s @ Some(_) => s
           case None        => matchWithPattern(b, candidate, bindings)
-      case Term.Placeholder() => Some(bindings)
-      case Term.AnonymousFunction(f) =>
-        matchWithPattern(f, candidate, bindings)
-      case Term.ApplyInfix.After_4_6_0(
-            Term.Name(name),
-            Term.Name(":="),
-            Type.ArgClause(Nil),
-            Term.ArgClause(List(v), _)
-          ) =>
+      case Syntax.InPattern.Wildcard() => Some(bindings)
+      case Syntax.InPattern.Binding(name, v) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           candidate match
             case t: Term => newBindings.checkAddTerm(name, t)
             case _       => None
         }
-      case Term.ApplyInfix.After_4_6_0(
-            v,
-            Term.Name("including"),
-            Type.ArgClause(Nil),
-            Term.ArgClause(uses, _)
-          ) if uses.forall(isUsesPattern(_)) =>
+      case Syntax.InPattern.Including(v, uses)
+          if uses.forall(isUsesPattern(_)) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           if checkUses(uses, candidate, newBindings) then Some(newBindings)
           else None

@@ -25,14 +25,6 @@ case class Rewriter()(using
       bindings: Bindings
   ): Option[Tree] =
     tree match
-      case Term.Apply.After_4_6_0(
-            Term.Name("?"),
-            Term.ArgClause(List(Term.Block(List(Term.Name(name)))), _)
-          ) =>
-        bindings.getTerm(name) match
-          case Some(t) => Some(t)
-          case None =>
-            throw new Exception(s"No binding found for name: $name")
       case Term.Name(name) if name.startsWith("?") =>
         bindings.getTerm(name.stripPrefix("?")) match
           case Some(t) => Some(t)

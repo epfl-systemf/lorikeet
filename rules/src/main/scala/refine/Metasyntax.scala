@@ -122,9 +122,41 @@ object Metasyntax:
           Some(v, uses)
         case _ => None
 
-    /** Strip any unessary parts (AnonymousFunction wrapper when a wildcard is
-      * present in the pattern...)
-      */
-    private def strip(tree: Tree): Tree = tree match
-      case Term.AnonymousFunction(t) => t
-      case _                         => tree
+  /** Metasyntax for rewrite templates */
+  object Rewrite:
+    /** Substitution syntax: `?name --> substitution` */
+    object Substitution:
+      def unapply(tree: Tree): Option[(String, Tree)] = tree match
+        case Term.ApplyInfix.After_4_6_0(
+              Term.Name(name),
+              Term.Name("-->"),
+              _,
+              Term.ArgClause(List(subst), _)
+            ) =>
+          Some((name, subst))
+        case Term.AnonymousFunction(
+              Term.ApplyInfix.After_4_6_0(
+                Term.Name(name),
+                Term.Name("-->"),
+                _,
+                Term.ArgClause(List(subst), _)
+              )
+            ) =>
+          Some((name, subst))
+        case _ => None
+
+    /** Identifier referencing a binding: `?name` */
+    object BindId:
+      def unapply(tree: Tree): Option[String] = tree match
+        case Term.Name(name) if name.startsWith("?") =>
+          Some(name.stripPrefix("?"))
+        case Type.Name(name) if name.startsWith("?") =>
+          Some(name.stripPrefix("?"))
+        case _ => None
+
+  /** Strip any unessary parts (AnonymousFunction wrapper when a wildcard is
+    * present in the pattern...)
+    */
+  private def strip(tree: Tree): Tree = tree match
+    case Term.AnonymousFunction(t) => t
+    case _                         => tree

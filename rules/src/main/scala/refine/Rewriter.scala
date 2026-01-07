@@ -25,23 +25,16 @@ case class Rewriter()(using
       bindings: Bindings
   ): Option[Tree] =
     tree match
-      case Term.Name(name) if name.startsWith("?") =>
-        bindings.getTerm(name.stripPrefix("?")) match
-          case Some(t) => Some(t)
-          case None =>
-            throw new Exception(s"No binding found for name: $name")
-      case Type.Name(name) if name.startsWith("?") =>
-        bindings.getType(name.stripPrefix("?")) match
-          case Some(t) => Some(t)
-          case None =>
-            throw new Exception(s"No binding found for type name: $name")
+      case Metasyntax.Rewrite.BindId(name) =>
+        tree match
+          case t: Term => Some(bindings.getTermOrThrow(name))
+          case t: Type => Some(bindings.getTypeOrThrow(name))
       case _ => None
 
   def isSubstitution(tree: Tree): Boolean =
     tree match
-      case Term.AnonymousFunction(sub) => isSubstitution(sub)
-      case Term.ApplyInfix.After_4_6_0(_, Term.Name("->"), _, _) => true
-      case _                                                     => false
+      case Metasyntax.Rewrite.Substitution(_, _) => true
+      case _                                     => false
 
   def applySubstitutions(
       tree: Tree,
@@ -58,14 +51,7 @@ case class Rewriter()(using
       bindings: Bindings
   ): Tree =
     substitution match
-      case Term.AnonymousFunction(sub) =>
-        applySingleSubstitution(tree, sub, bindings)
-      case Term.ApplyInfix.After_4_6_0(
-            Term.Name(name),
-            Term.Name("->"),
-            _,
-            Term.ArgClause(List(subst), _)
-          ) =>
+      case Metasyntax.Rewrite.Substitution(name, subst) =>
         val baseTree = extractBinding(Term.Name(name), bindings)
         val substTree = applyBindings(subst, bindings)
         baseTree match

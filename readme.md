@@ -156,11 +156,10 @@ Referencing a binding that was not created in the matcher will result in an erro
 
 #### Substitutions
 
-The syntax `` `?body`(`?f` -> bar, `?g` -> foo) `` can be used to reference a binding named `body` and replace occurrences of bindings `f` and `g` in `body` with arbitrary trees `bar` and `foo` respectively. Bindings are also substituted recursively in the substituted trees.
+The syntax `` `?body`(`?f` --> bar, `?g` --> foo) `` can be used to reference a binding named `body` and replace occurrences of bindings `f` and `g` in `body` with arbitrary trees `bar` and `foo` respectively. Bindings are also substituted recursively in the substituted trees.
 
 Referencing a binding that was not created in the matcher will result in an error.
 
 ## Planned
 
 - Support for matching & binding sequences (e.g., parameter lists, argument lists, etc.)
-- May have to change substitution syntax eventually, as it will conflict (in future Scala 3) with pure functions that use `->` syntax. We could use something unused like `-->` instead.

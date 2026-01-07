@@ -84,3 +84,31 @@ case class Bindings(
     */
   def getType(name: String): Option[Type] =
     types.get(name)
+
+  /** Get a bound term variable or throw if not found.
+    *
+    * @param name
+    *   the variable name (without the ? prefix)
+    * @return
+    *   the bound term
+    * @throws Exception
+    *   if no binding exists for the name
+    */
+  def getTermOrThrow(name: String): Term =
+    getTerm(name) match
+      case Some(t) => t
+      case None =>
+        throw new Exception(s"No binding found for term name: $name")
+
+  /** Get a bound type variable or throw if not found. * @param name the
+    * variable name (without the ? prefix)
+    * @return
+    *   the bound type
+    * @throws Exception
+    *   if no binding exists for the name
+    */
+  def getTypeOrThrow(name: String): Type =
+    getType(name) match
+      case Some(t) => t
+      case None =>
+        throw new Exception(s"No binding found for type name: $name")

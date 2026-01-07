@@ -17,10 +17,10 @@ case class Matcher()(using
       bindings: Bindings
   ): MatchResult =
     pat match
-      case Syntax.PatternBlock(pattern) =>
+      case Metasyntax.PatternBlock(pattern) =>
         matchWithPattern(pattern, cand, bindings)
       // Wildcard + binding for symbols
-      case Syntax.SymbolBind(name) =>
+      case Metasyntax.SymbolBind(name) =>
         (pat, cand) match
           case (_: Term, t: Term) => bindings.checkAddTerm(name, t)
           case (_: Type, t: Type) => bindings.checkAddType(name, t)
@@ -31,10 +31,10 @@ case class Matcher()(using
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead
-      case Syntax.WithOptionalType(_, patType, typeField)
+      case Metasyntax.WithOptionalType(_, patType, typeField)
           if !matchOptions.matchAscriptions =>
         cand match
-          case Syntax.WithOptionalType(_, candType, _) =>
+          case Metasyntax.WithOptionalType(_, candType, _) =>
             compareWithOptionalAscription(
               pat,
               cand,
@@ -44,12 +44,12 @@ case class Matcher()(using
               typeField
             )
           case _ => None
-      case Syntax.FunctionWithOptionalParamTypes(
+      case Metasyntax.FunctionWithOptionalParamTypes(
             Term.ParamClause(patParams, patParamMods),
             _
           ) if !matchOptions.matchAscriptions =>
         cand match
-          case Syntax.FunctionWithOptionalParamTypes(
+          case Metasyntax.FunctionWithOptionalParamTypes(
                 Term.ParamClause(candParams, candParamMods),
                 _
               ) =>
@@ -189,20 +189,20 @@ case class Matcher()(using
       bindings: Bindings
   ): MatchResult =
     pat match
-      case Syntax.InPattern.Escape(arg) =>
+      case Metasyntax.InPattern.Escape(arg) =>
         compareTrees(arg, candidate, bindings)
-      case Syntax.InPattern.Alternative(a, b) =>
+      case Metasyntax.InPattern.Alternative(a, b) =>
         matchWithPattern(a, candidate, bindings) match
           case s @ Some(_) => s
           case None        => matchWithPattern(b, candidate, bindings)
-      case Syntax.InPattern.Wildcard() => Some(bindings)
-      case Syntax.InPattern.Binding(name, v) =>
+      case Metasyntax.InPattern.Wildcard() => Some(bindings)
+      case Metasyntax.InPattern.Binding(name, v) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           candidate match
             case t: Term => newBindings.checkAddTerm(name, t)
             case _       => None
         }
-      case Syntax.InPattern.Including(v, uses)
+      case Metasyntax.InPattern.Including(v, uses)
           if uses.forall(isUsesPattern(_)) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           if checkUses(uses, candidate, newBindings) then Some(newBindings)

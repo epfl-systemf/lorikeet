@@ -6,7 +6,7 @@ import scala.meta._
   *
   * These extractors represent special syntax used for rule pattern.
   */
-object Syntax:
+object Metasyntax:
 
   /** Pattern Blocks: `?{ pattern }` */
   object PatternBlock:

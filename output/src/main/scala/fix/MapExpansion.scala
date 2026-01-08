@@ -1,6 +1,6 @@
 package fix
 
-object Parsed:
+object MapExpansion:
   // Expand a map
   def expand(l: List[Int]): List[Int] =
     l match

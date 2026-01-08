@@ -3,7 +3,11 @@ rule = ParsedRule
  */
 package fix
 
-object Parsed:
+// This test checks substitution 
+// and contextual type matching for lambda parameter types
+// among other things
+
+object MapExpansion:
   // Expand a map
   def expand(l: List[Int]): List[Int] =
     l.map((x: Int) => x * 2)
@@ -11,5 +15,3 @@ object Parsed:
     l.map((x) => x * x)
   def expand3(l: List[Int]): List[Int] =
     l.map(x => x + 1)
-
-  // val test = Array(1) == Array(1)

@@ -3,6 +3,8 @@ rule = ParsedRule
  */
 package fix
 
+// This test checks the "including" metasyntax
+
 object Including:
   // Simplify a match
   def simplifyMatch(x: Option[Int]): String =

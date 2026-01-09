@@ -32,13 +32,29 @@ object SemanticTypeMatching:
           case s: MethodSignature =>
             Some(s.returnType)
           case _ =>
-            System.err.println(
-              "Unsupported signature type for tree: " + t.syntax
-            )
+            // System.err.println(
+            //   "Unsupported signature type for tree: " + t.syntax
+            // )
             None
       case _ =>
-        System.err.println("No symbol info found for tree: " + t.syntax)
+        // System.err.println("No symbol info found for tree: " + t.syntax)
         None
+
+  /** Get the literal type of a literal tree */
+  def getLiteralType(t: Tree): Option[Type] =
+    t match
+      case Lit.Int(_)     => Some(Type.Name("Int"))
+      case Lit.String(_)  => Some(Type.Name("String"))
+      case Lit.Double(_)  => Some(Type.Name("Double"))
+      case Lit.Float(_)   => Some(Type.Name("Float"))
+      case Lit.Boolean(_) => Some(Type.Name("Boolean"))
+      case Lit.Char(_)    => Some(Type.Name("Char"))
+      case Lit.Long(_)    => Some(Type.Name("Long"))
+      case Lit.Short(_)   => Some(Type.Name("Short"))
+      case Lit.Byte(_)    => Some(Type.Name("Byte"))
+      case Lit.Null()     => Some(Type.Name("Null"))
+      case Lit.Unit()     => Some(Type.Name("Unit"))
+      case _              => None
 
   /** Match a candidate tree's semantic type against a pattern type.
     *
@@ -62,7 +78,14 @@ object SemanticTypeMatching:
       bindings: Bindings
   )(using doc: SemanticDocument): MatchResult =
     val candType = getSymbolSemanticType(cand)
-    if candType.isEmpty then return None
+    val literalType = getLiteralType(cand)
+
+    (candType, literalType) match
+      case (Some(_), _)                                                    => ()
+      case (None, Some(litType)) if patType.structure == litType.structure =>
+        // TODO: figure out lit types and bindings
+        return Some(bindings)
+      case _ => return None
 
     resolvePatternType(patType, bindings) match
       case PatternTypeResolution.Wildcard              => Some(bindings)
@@ -122,11 +145,14 @@ object SemanticTypeMatching:
         else None
 
       // TODO: Handle generic types
-      // case (TypeRef(_, candSymbol, typeArgs), Type.Apply(Type.Name(patTypeName), typeArgClause)) =>
-      //   if candSymbol.displayName == patTypeName then
-      //     // Compare type arguments recursively
-      //     ???
-      //   else None
+      case (
+            TypeRef(_, candSymbol, typeArgs),
+            Type.Apply(Type.Name(patTypeName), typeArgClause)
+          ) =>
+        if candSymbol.displayName == patTypeName then
+          // Compare type arguments recursively
+          ???
+        else None
 
       case _ =>
         System.err.println(

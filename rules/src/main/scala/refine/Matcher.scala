@@ -31,13 +31,13 @@ case class Matcher()(using
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead
-      case Metasyntax.WithOptionalType(_, patType, typeField)
+      case Metasyntax.WithOptionalType(extPat, patType, typeField)
           if !matchOptions.matchAscriptions =>
         cand match
-          case Metasyntax.WithOptionalType(_, candType, _) =>
+          case Metasyntax.WithOrWithoutOptionalType(extCand, candType, _) =>
             compareWithOptionalAscription(
-              pat,
-              cand,
+              extPat,
+              extCand,
               bindings,
               patType,
               candType,
@@ -75,21 +75,34 @@ case class Matcher()(using
       bindings: Bindings,
       patType: Option[Type],
       candType: Option[Type],
-      typeFieldName: String
+      typeFieldName: Option[String]
   ): MatchResult =
     (patType, candType) match
-      case (Some(patTpe), Some(_)) =>
+      case (Some(patTpe), Some(candTpe)) =>
         // Both have explicit types - compare structurally
-        compareProducts(pat, cand, bindings)
+        typeFieldName match
+          case Some(fieldName) =>
+            compareProducts(pat, cand, bindings)
+          case None => // Case of actual ascriptions
+            compareTrees(pat, cand, bindings)
+
       case (Some(tpe), None) =>
         // Pattern has type, candidate doesn't - use semantic matching
         SemanticTypeMatching.matchTreeType(cand, tpe, bindings).flatMap {
           newBindings =>
-            compareProducts(pat, cand, newBindings, Set(typeFieldName))
+            typeFieldName match
+              case Some(fieldName) =>
+                compareProducts(pat, cand, newBindings, Set(fieldName))
+              case None =>
+                compareTrees(pat, cand, newBindings)
         }
       case (None, _) =>
         // Pattern has no type - accept any candidate type
-        compareProducts(pat, cand, bindings, Set(typeFieldName))
+        typeFieldName match
+          case Some(fieldName) =>
+            compareProducts(pat, cand, bindings, Set(fieldName))
+          case None =>
+            compareTrees(pat, cand, bindings)
 
   /** Compare function parameters with semantic type matching
     */

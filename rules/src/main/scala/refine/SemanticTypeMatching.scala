@@ -87,18 +87,11 @@ object SemanticTypeMatching:
         return Some(bindings)
       case _ => return None
 
-    resolvePatternType(patType, bindings) match
-      case PatternTypeResolution.Wildcard              => Some(bindings)
-      case PatternTypeResolution.UnboundVariable(name) =>
-        // Can't bind to semantic types without explicit ascription
-        // System.err.println(
-        //   s"Cannot bind $name to implicit type variable: no explicit type ascription found"
-        // )
-        None
-      case PatternTypeResolution.Resolved(resolvedType) =>
-        // Compare the resolved pattern type with candidate's semantic type
-        compareSemanticTypes(candType.get, resolvedType)
-          .map(_ => bindings)
+    compareSemanticTypesWithPattern(
+      candType.get,
+      patType,
+      bindings
+    )
 
   /** Resolve a pattern type, handling wildcards and variable bindings
     *
@@ -124,42 +117,66 @@ object SemanticTypeMatching:
 
   /** Compare a semantic type with a syntactic pattern type.
     *
-    * Currently supports only simple type names (Int, String, etc.)
+    * Currently supports only simple type names (Int, String, etc.) and generic
+    * types (List[Int], etc.)
     *
-    * TODO: Support generic types, type applications, etc.
+    * TODO: Extend to support more complex types
     *
     * @param semType
     *   the semantic type from SemanticDB
-    * @param synType
+    * @param patType
     *   the syntactic type from the pattern
+    * @param bindings
+    *   current bindings for type variables
     * @return
-    *   Some(()) if types match, None otherwise
+    *   Some(updatedBindings) if types match, None otherwise
     */
-  private def compareSemanticTypes(
+  private def compareSemanticTypesWithPattern(
       semType: SemanticType,
-      synType: Type
-  ): Option[Unit] =
-    (semType, synType) match
-      case (TypeRef(_, candSymbol, Nil), Type.Name(patTypeName)) =>
-        if candSymbol.displayName == patTypeName then Some(())
-        else None
-
-      // TODO: Handle generic types
-      case (
-            TypeRef(_, candSymbol, typeArgs),
-            Type.Apply(Type.Name(patTypeName), typeArgClause)
-          ) =>
-        if candSymbol.displayName == patTypeName then
-          // Compare type arguments recursively
-          ???
-        else None
-
-      case _ =>
-        System.err.println(
-          s"Unsupported type comparison between candidate type $semType " +
-            s"and pattern type $synType"
-        )
+      patType: Type,
+      bindings: Bindings
+  ): MatchResult =
+    resolvePatternType(patType, bindings) match
+      case PatternTypeResolution.Wildcard              => Some(bindings)
+      case PatternTypeResolution.UnboundVariable(name) =>
+        // Cannot bind to semantic types without explicit ascription
         None
+      case PatternTypeResolution.Resolved(resolvedType) =>
+        // Compare resolved pattern type with candidate's semantic type
+        (semType, resolvedType) match
+          // Simple types
+          case (TypeRef(_, candSymbol, Nil), Type.Name(patTypeName)) =>
+            if candSymbol.displayName == patTypeName then Some(bindings)
+            else None
+
+          // Generic types
+          case (
+                TypeRef(_, candSymbol, typeArgs),
+                Type.Apply.After_4_6_0(Type.Name(patTypeName), typeArgClause)
+              ) =>
+            if candSymbol.displayName == patTypeName
+              && typeArgs.length == typeArgClause.values.length
+              && typeArgs
+                .zip(typeArgClause.values)
+                .map { case (semArg, synArg) =>
+                  compareSemanticTypesWithPattern(
+                    semArg,
+                    synArg,
+                    bindings
+                  )
+                }
+                .forall(_.isDefined)
+            then Some(bindings)
+            else None
+
+          // TODO: Handle other forms of types
+
+          case _ =>
+            System.err.println(
+              s"Unsupported type comparison between candidate type "
+                + s" $semType and pattern type $patType"
+            )
+            None
 
   private enum PatternTypeResolution:
     // Wildcard (?)

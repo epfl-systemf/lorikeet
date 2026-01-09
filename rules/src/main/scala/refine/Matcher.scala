@@ -77,32 +77,24 @@ case class Matcher()(using
       candType: Option[Type],
       typeFieldName: Option[String]
   ): MatchResult =
-    (patType, candType) match
+    val typeMatch = (patType, candType) match
       case (Some(patTpe), Some(candTpe)) =>
         // Both have explicit types - compare structurally
-        typeFieldName match
-          case Some(fieldName) =>
-            compareProducts(pat, cand, bindings)
-          case None => // Case of actual ascriptions
-            compareTrees(pat, cand, bindings)
-
+        compareTrees(patTpe, candTpe, bindings)
       case (Some(tpe), None) =>
         // Pattern has type, candidate doesn't - use semantic matching
-        SemanticTypeMatching.matchTreeType(cand, tpe, bindings).flatMap {
-          newBindings =>
-            typeFieldName match
-              case Some(fieldName) =>
-                compareProducts(pat, cand, newBindings, Set(fieldName))
-              case None =>
-                compareTrees(pat, cand, newBindings)
-        }
+        SemanticTypeMatching.matchTreeType(cand, tpe, bindings)
       case (None, _) =>
         // Pattern has no type - accept any candidate type
-        typeFieldName match
-          case Some(fieldName) =>
-            compareProducts(pat, cand, bindings, Set(fieldName))
-          case None =>
-            compareTrees(pat, cand, bindings)
+        Some(bindings)
+
+    typeMatch.flatMap(newBindings =>
+      typeFieldName match
+        case Some(fieldName) =>
+          compareProducts(pat, cand, newBindings, Set(fieldName))
+        case None => // Case of actual ascriptions
+          compareTrees(pat, cand, newBindings)
+    )
 
   /** Compare function parameters with semantic type matching
     */

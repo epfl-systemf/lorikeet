@@ -31,7 +31,7 @@ case class LintMessage(t: Tree, r: String, m: Option[String])
       case None      => s"[$r] Rule matched."
 }
 
-class ScalaRefine extends SemanticRule("ParsedRule"):
+class ScalaRefine extends SemanticRule("MetaRule"):
 
   def collectTopLevelMatches(
       tree: Tree,

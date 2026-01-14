@@ -1,5 +1,5 @@
 /*
-rule = ParsedRule
+rule = MetaRule
  */
 package fix
 

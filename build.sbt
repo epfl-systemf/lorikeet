@@ -71,6 +71,12 @@ lazy val testsAggregate = Project("tests", file("target/testsAggregate"))
 lazy val tests = projectMatrix
   .settings(
     publish / skip := true,
+    // The 3 lines below are needed to ensure a "medium" lint level during tests
+    // Default is "full", as this is what is required by the script, but this 
+    // generates lints for each rewrite
+    (Test / baseDirectory) := (ThisBuild / baseDirectory).value,
+    Test / fork := true,
+    Test / envVars += ("LINT_LEVEL" -> "medium"),
     scalafixTestkitOutputSourceDirectories :=
       TargetAxis
         .resolve(output, Compile / unmanagedSourceDirectories)

@@ -34,18 +34,10 @@ semanticdbVersion := scalafixSemanticdb.revision
 scalafixDependencies += "ch.epfl.sidoniebouthors" % "scala-rewrite_3" % "0.1.0-SNAPSHOT"
 ```
 
-4. Create a `.scalafix.conf` file in the root of your project with the following content (where `CustomRule` is the name of the rule to run):
-
-```hocon
-rules = [
-  CustomRule
-]
-```
-
-5. Run Scalafix on your project:
+4. Run Scalafix on your project, specifying the rule to run:
 
 ```bash
-sbt scalafix
+sbt "scalafix MetaRule"
 ```
 
 ### Using Parsed Rules Specifically
@@ -114,10 +106,46 @@ configured to use the custom rules as described above.
 
 The script will replace the `assignment.scala` file in the scaffold project with the ones from the submission, then compile and run scalafix check on it, collecting the results in a logs file.
 
-Note that this script does not rewrite the submission files, it only checks them.
-Additionaly, submissions that do not compile will be reported as such but will not be checked
-with scalafix. This means it may be a good idea to remove `-Xfatal-warnings` or other such flags
+Note that submissions that do not compile will be reported as such but will not be checked with scalafix. This means it may be a good idea to remove `-Xfatal-warnings` or other such flags
 from the scaffold project.
+
+The script output will be individual diffs for each submissions, as well as individual feedback (which rules matches, with their descriptions and where specifically in the code), and a summary at the end with statistics on how many submissions passed each rule.
+
+The console output looks something like this:
+
+```
+Diffs directory: /home/sidonie/Data/Academique/MA3/CodeQualityFeedback/evaluating/grading_diffs_2026.01.01_14.26.00
+Lint reports directory: /home/sidonie/Data/Academique/MA3/CodeQualityFeedback/evaluating/grading_reports_2026.01.01_14.26.00
+
+Starting grading process...
+
+-> ⚠️  ISSUES:  359355 / 0 -> Var Usage (1), If Simplification (12)
+-> ⚠️  ISSUES:  361678 / 0 -> If Simplification (12)
+-> ⚠️  ISSUES:  356669 / 0 -> Var Usage (5)
+-> ⚠️  ISSUES:  380092 / 0 -> If Simplification (5)
+-> ✅ SUCCESS: 377073 / 0
+-> ⚠️  ISSUES:  378842 / 2 -> Var Usage (4), If Simplification (2)
+-> ⚠️  ISSUES:  372197 / 0 -> Var Usage (3), If Simplification (4)
+-> ⚠️  ISSUES:  344921 / 0 -> If Simplification (5)
+-> ⚠️  ISSUES:  363557 / 0 -> Var Usage (12)
+.....
+
+--- SUMMARY ---
+Total submissions: 421
+Submissions with missing file: 0
+Submissions with compile errors: 1
+Submissions failing check: 373
+
+--- STATISTICS ---
+Submissions with Matches:
+  If Simplification: 255
+  Var Usage: 130
+Total Rule Matches:
+  If Simplification: 2466
+  Var Usage: 715
+
+Grading complete.
+```
 
 See the configuration options at the top of the script.
 

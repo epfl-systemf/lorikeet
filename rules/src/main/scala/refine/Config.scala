@@ -17,22 +17,21 @@ case class RulesConfig(rules: List[RuleConfig]) derives ConfigReader
 
 enum LintLevel:
   case Full
-  case Default
+  case Medium
   case None
 
 object Config:
   def getLintLevel(): LintLevel =
     sys.env.get("LINT_LEVEL") match
-      case Some(full) if full.toLowerCase == "full" => LintLevel.Full
-      case Some(none) if none.toLowerCase == "none" => LintLevel.None
-      case Some(default) if default.toLowerCase == "default" =>
-        LintLevel.Default
-      case None => LintLevel.Default
+      case Some(full) if full.toLowerCase == "full"       => LintLevel.Full
+      case Some(none) if none.toLowerCase == "none"       => LintLevel.None
+      case Some(medium) if medium.toLowerCase == "medium" => LintLevel.Medium
+      case None                                           => LintLevel.Full
       case Some(other) =>
         System.err.println(
-          s"Unknown LINT_LEVEL value: $other. Using default level."
+          s"Unknown LINT_LEVEL value: $other. Using highest level."
         )
-        LintLevel.Default
+        LintLevel.Full
 
   def parseRulesConfig(): List[CustomRule] =
     val configFile = sys.env.get("RULES_CONF") match

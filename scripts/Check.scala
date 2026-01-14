@@ -127,12 +127,7 @@ object CheckTool:
       (e: String) => output.append(e).append('\n')
     )
     val command =
-      Seq(
-        "sbt",
-        "--client",
-        "-DLINT_LEVEL=full",
-        "scalafix"
-      )
+      Seq("sbt", "--client", "scalafix MetaRule")
     val exitCode = Process(command, labDir.toFile).!(logger)
     (exitCode, output.toString())
   }
@@ -176,7 +171,7 @@ object CheckTool:
   case object OtherLine extends LineType
 
   private val ErrorHeaderPattern: Regex =
-    """\[error\]\s+(\S+):(\d+):(\d+):\s+error:\s+\[ParsedRule\]\s+\[(.*?)\]\s+(.*)""".r
+    """\[error\]\s+(\S+):(\d+):(\d+):\s+error:\s+\[MetaRule\]\s+\[(.*?)\]\s+(.*)""".r
   private val CodeLinePattern: Regex =
     """\[error\](\s*.*)""".r
   private val PointerLinePattern: Regex =

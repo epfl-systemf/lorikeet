@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This is an old script for automated checking of student submissions
+# The newer version is located at scripts/Check.scala
+# This script is kept only for reference
+
 ROOT="$(pwd)"
 
 # --- CONFIG ---

@@ -16,16 +16,17 @@ sbt "scala-rewrite / publishLocal"
 
 ## Usage
 
-### Using a Local Rule
+### Using the MetaRule
 
-1. Publish the rule locally using the command above.
-2. Add sbt-scalafix to your `project/plugins.sbt` file:
+1. Publish the rule locally using the command above, or use the published version if available.
+2. Add sbt-scalafix and sbt-scalafmt to your `project/plugins.sbt` file:
 
 ```scala
 addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.4")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
 ```
 
-3. Add the dependency and semanticdb support to your `build.sbt` file:
+3. Add the rule as a dependency and semanticdb support to your `build.sbt` file:
 
 ```scala
 semanticdbEnabled := true
@@ -34,15 +35,7 @@ semanticdbVersion := scalafixSemanticdb.revision
 scalafixDependencies += "ch.epfl.sidoniebouthors" % "scala-rewrite_3" % "0.1.0-SNAPSHOT"
 ```
 
-4. Run Scalafix on your project, specifying the rule to run:
-
-```bash
-sbt "scalafix MetaRule"
-```
-
-### Using Parsed Rules Specifically
-
-On top of the steps above, you need to provide a configuration file named `.rewriter.conf` in the root of your project with the following structure:
+4. Create a `.rewriter.conf` file in the root of your project with your custom rule configuration (see how to write rules below):
 
 ```hocon
 rules = [
@@ -59,13 +52,13 @@ rules = [
 ]
 ```
 
-You need to add the following dependency to your `build.sbt` file to use Scalafmt:
+5. Run Scalafix on your project, specifying the rule name:
 
-```scala
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
+```bash
+sbt "scalafix MetaRule"
 ```
 
-You also need to provide a `.scalafmt.conf` file in the root of your project. Scalafmt will be run before and after applying the rewrites to ensure proper formatting. A minimal configuration could be:
+To use the `Check.scala` script, you also need to provide a `.scalafmt.conf` file in the root of your project. Scalafmt will be run before and after applying the rewrites to ensure proper formatting. A minimal configuration could be:
 
 ```hocon
 version = 3.9.9
@@ -82,11 +75,11 @@ This is because sbt task caching will avoid rerunning a task that has already be
 
 ### Running a Check on Student Submissions
 
-See script [check.sh](scripts/check.sh).
+See script [Check.scala](scripts/Check.scala).
 
 This script expects a submission directory with the following structure:
 
-```
+```tree
 submission/
 ├── SCIPER
 │   └── 0
@@ -113,7 +106,7 @@ The script output will be individual diffs for each submissions, as well as indi
 
 The console output looks something like this:
 
-```
+```text
 Diffs directory: /home/sidonie/Data/Academique/MA3/CodeQualityFeedback/evaluating/grading_diffs_2026.01.01_14.26.00
 Lint reports directory: /home/sidonie/Data/Academique/MA3/CodeQualityFeedback/evaluating/grading_reports_2026.01.01_14.26.00
 
@@ -149,7 +142,7 @@ Grading complete.
 
 See the configuration options at the top of the script.
 
-## Specs for Parsed Rules
+## Specs for Writing Rules
 
 Will be updated as I add more features.
 
@@ -157,36 +150,76 @@ The rules are simply written in Scala 3 with some additional syntax for pattern 
 
 ### Matcher
 
-The matcher is matched literally except for special pattern syntax.
+The Matcher structurally compares target code and query patterns (The `pattern` field of a rule). Query patterns are matched literally, except for special syntax that allows for more flexible matching, in particular it uses two main constructs: Metavariables and Pattern Blocks.
 
-Patterns are surrounded by `?{...}`. Everything inside the braces will be matched according to pattern rules and not literally.
+#### Metavariables
 
-| Syntax   | Name        | Description                                           |
-| -------- | ----------- | ----------------------------------------------------- |
-| `_`      | Wildcard    | matches anything                                      |
-| `a \| b` | Alternative | matches either pattern a or pattern b                 |
-| `+a`     | Escape      | `a` will be matched literaly rather than as a pattern |
-| `a := b` | Binding     | matches pattern `b` and binds to `a`                  |
+The syntax `` `?f` `` binds a name, term, or type to an identifier (here `f`).
 
-Additionally, the syntax `` `?f` `` can be used to bind a name, type or term to the name `f`. If `` `?f` `` is used later in the pattern, it will match the same name, type or term, allowing for equality checks.
+- First use: Acts as a wildcard binding
+- Subsequent uses (with the same name): Acts as an equality check to ensure the bound entities are identical
 
-It acts as a wildcard binding (similar to `?{f := _}`) on first use and as an equality check on subsequent uses.
+#### Pattern Blocks
+
+Patterns Blocks are surrounded by `?{...}`. Everything inside the braces will be matched according to pattern rules and not literally.
+
+| Syntax                 | Name        | Description                                                     |
+| ---------------------- | ----------- | --------------------------------------------------------------- |
+| `_`                    | Wildcard    | Matches anything                                                |
+| `pat1 \| pat2`         | Alternative | Matches if the candidate matches either `pat1` or `pat2`        |
+| `+term`                | Escape      | Matched if the candidate matches the `term` literally           |
+| `ident := pat`         | Binding     | Matches `pat` and binds the capture to `ident`                  |
+| `pat including (uses)` | Including   | Matches `pat` and satisfies symbol count conditions (see below) |
+
+#### Including patterns
+
+The `uses` inside an `including` pattern specify constraints on the number of times certain symbols must appear in the matched tree. It is a comma-separated list of symbol count conditions of the form below:
+
+| Syntax     | Example     | Description                                   |
+| :--------- | :---------- | :-------------------------------------------- |
+| `s`        | `?x`        | Matches if symbol s is present at least once. |
+| `n s`      | `3 ?x`      | Matches if symbol s appears exactly n times.  |
+| `s min(n)` | `?x min(1)` | Matches if symbol s appears at least n times. |
+| `s max(n)` | `?x max(1)` | Matches if symbol s appears at most n times.  |
+
+Note that `s` can be any Scala identifier, or a metavariables (like  `` `?f` ``).
+
+#### Semantic Type Matching
+
+By default, the tool treats optional type ascriptions in patterns as semantic constraints. This includes:
+
+- Types of `val` and `var` declarations (`val x: Int = 1`)
+- Return types in `def` declarations (`def f(): Int = 2`)
+- Types in anonymous function parameter lists (`(x: Int) => 2 * x`)
+- Type ascriptions (`expr: Int`)
+
+By default, if a query pattern specifies a type (for example `val x: Int`) but the student code omits it (`val x = 1`), the Matcher unifies the pattern's type with the candidate's inferred semantic type. If a query pattern omits a type ascription, the Matcher does not impose any type constraint on the candidate.
+
+To force strict syntactic matching instead, set `match-ascriptions = true` in the rule configuration.
 
 ### Rewriter
 
-The rewriter is inserted literally, but can reference bindings from the matcher.
+The Rewriter replaces matched instances with the rewrite template (the `rewrite` field of a rule).
 
 #### Bindings
 
-The syntax `` `?f` `` can be used to reference a binding named `f` created in the matcher.
+The syntax `` `?f` `` can be used to reference a binding named `f` created in the matcher, and insert the corresponding matched tree at that location.
 
-Referencing a binding that was not created in the matcher will result in an error.
+Referencing a binding that was not created in the Matcher will result in an error.
 
 #### Substitutions
 
-The syntax `` `?body`(`?f` --> bar, `?g` --> foo) `` can be used to reference a binding named `body` and replace occurrences of bindings `f` and `g` in `body` with arbitrary trees `bar` and `foo` respectively. Bindings are also substituted recursively in the substituted trees.
+The syntax `` `?body`(`?f` --> bar, `?g` --> foo) `` replaces occurrences of metavariable `f` and `g` within `body` with arbitrary trees `bar` and `foo` respectively.
+Bindings are also substituted recursively in the substituted trees.
 
-Referencing a binding that was not created in the matcher will result in an error.
+The Rewriter uses semantic information to ensure that only the correct symbol is substituted. For example, if `f` is bound to a method named `foo` in the Matcher, only occurrences of `foo` that refer to that specific method will be replaced, and not other methods/variables named `foo` in the same scope.
+
+Referencing a binding that was not created in the Matcher will result in an error.
+
+### Implementation Notes
+
+- **Top-level matches only**: To prevent overlapping patches (which can break code), the tool only considers top-level matches. If a match is found inside another match, only the outer (parent) match is rewritten. You may need to run Scalafix multiple times to catch all nested smells.
+- **Binding limits**: Currently, the tool cannot bind a semantic type to a metavariable if that type was inferred (not explicitly written in code).
 
 ## Planned
 

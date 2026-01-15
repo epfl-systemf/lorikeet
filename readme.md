@@ -42,7 +42,7 @@ rules = [
   {
     name = "RuleName"
     pattern = """
-      // pattern matching syntax
+      // query pattern syntax
     """
     rewrite = """
       // rewriting syntax
@@ -142,11 +142,32 @@ Grading complete.
 
 See the configuration options at the top of the script.
 
-## Specs for Writing Rules
+## Writing Rules
 
-Will be updated as I add more features.
+The structure of the configuration file `.rewriter.conf` is as follows:
 
-The rules are simply written in Scala 3 with some additional syntax for pattern matching.
+```hocon
+rules = [
+  {
+    name = "RuleName"
+    pattern = """
+      // query pattern syntax
+    """
+    rewrite = """
+      // rewriting syntax
+    """
+  }
+  // additional rules...
+]
+```
+
+- `name`: The name of the rule, used to identify it when running scalafix.
+- `pattern`: The query pattern to match in the code. See Matcher section below for syntax.
+- `rewrite`: The template to use for rewriting matched code. See Rewriter section below for syntax.
+- `description` (optional): A description of the rule, used for feedback messages.
+- `match-ascriptions` (optional, default: false): If true, type ascriptions in the pattern are matched syntactically rather than semantically. See Matcher section below for details.
+
+The tool will search for instances of code that match the `pattern`, and replace them with the `rewrite` template. Both the `pattern` and `rewrite` fields are written in Scala 3 syntax, with additional constructs for matching and rewriting.
 
 ### Matcher
 

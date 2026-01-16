@@ -20,6 +20,7 @@ case class Matcher()(using
       case Metasyntax.PatternBlock(pattern) =>
         matchWithPattern(pattern, cand, bindings)
       // Wildcard + binding for symbols
+      case Metasyntax.WildcardSymbol() => Some(bindings)
       case Metasyntax.SymbolBind(name) =>
         (pat, cand) match
           case (_: Term, t: Term) => bindings.checkAddTerm(name, t)

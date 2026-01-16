@@ -28,11 +28,18 @@ object Metasyntax:
   /** Symbol binding for term or types: `?name` */
   object SymbolBind:
     def unapply(tree: Tree): Option[String] = tree match
-      case Term.Name(name) if name.startsWith("?") =>
+      case Term.Name(name) if name.startsWith("?") && name != "?" =>
         Some(name.stripPrefix("?"))
-      case Type.Name(name) if name.startsWith("?") =>
+      case Type.Name(name) if name.startsWith("?") && name != "?" =>
         Some(name.stripPrefix("?"))
       case _ => None
+
+  /** Wildcard symbol `?` */
+  object WildcardSymbol:
+    def unapply(tree: Tree): Boolean = tree match
+      case Term.Name(name) if name == "?" => true
+      case Type.Name(name) if name == "?" => true
+      case _                              => false
 
   /** Extracts optional type ascriptions
     *
@@ -48,28 +55,30 @@ object Metasyntax:
     * structural comparison.
     */
   object WithOptionalType:
-    def unapply(tree: Tree): Option[(Tree, Option[Type], Option[String])] = tree match
-      case d @ Defn.Def.After_4_7_3(_, _, _, decltpe, _) =>
-        Some((d, decltpe, Some("decltpe")))
-      case v @ Defn.Val(_, _, decltpe, _) =>
-        Some((v, decltpe, Some("decltpe")))
-      case v @ Defn.Var.After_4_7_2(_, _, decltpe, _) =>
-        Some((v, decltpe, Some("decltpe")))
-      case a @ Term.Ascribe(t, tpe) =>
-        Some((t, Some(tpe), None))
-      case _ => None
+    def unapply(tree: Tree): Option[(Tree, Option[Type], Option[String])] =
+      tree match
+        case d @ Defn.Def.After_4_7_3(_, _, _, decltpe, _) =>
+          Some((d, decltpe, Some("decltpe")))
+        case v @ Defn.Val(_, _, decltpe, _) =>
+          Some((v, decltpe, Some("decltpe")))
+        case v @ Defn.Var.After_4_7_2(_, _, decltpe, _) =>
+          Some((v, decltpe, Some("decltpe")))
+        case a @ Term.Ascribe(t, tpe) =>
+          Some((t, Some(tpe), None))
+        case _ => None
 
   /** Extracts a tree with optional type ascription (as above). Additionally,
     * for terms without type ascription, returns an empty fieldName.
     */
   object WithOrWithoutOptionalType:
-    def unapply(tree: Tree): Option[(Tree, Option[Type], Option[String])] = tree match
-      case WithOptionalType(base, optType, fieldName) =>
-        Some((base, optType, fieldName))
-      // Any other Term is just without type ascription
-      case t: Term =>
-        Some((t, None, None))
-      case _ => None
+    def unapply(tree: Tree): Option[(Tree, Option[Type], Option[String])] =
+      tree match
+        case WithOptionalType(base, optType, fieldName) =>
+          Some((base, optType, fieldName))
+        // Any other Term is just without type ascription
+        case t: Term =>
+          Some((t, None, None))
+        case _ => None
 
   /** Extracts parameter clause and body from Term.Function for parameter type
     * handling (as above)

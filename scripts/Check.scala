@@ -68,7 +68,7 @@ object CheckTool:
     val attemptDir =
       latestAttemptDir(studentDir) match
         case Some(s) => s
-        case None    => return NoSubmission(studentId)
+        case None    => return logAndReturn(NoSubmission(studentId))
 
     val attempt = attemptDir.getFileName.toString.toInt
     val lintReport = cfg.lintDir.resolve(s"$studentId-$attempt.lint.txt")

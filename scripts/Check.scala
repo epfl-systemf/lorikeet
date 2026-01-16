@@ -1,5 +1,14 @@
 //> using scala 3.7.4
 
+// --- CONFIGURATION ---
+val LAB_DIR_NAME = "find"
+val SUBMISSIONS_DIR_NAME = "student-lab-submissions/2024/find/submissions"
+val TARGET_FILES = Seq("src/main/scala/find/find.scala")
+
+// val LAB_DIR_NAME = "boids"
+// val SUBMISSIONS_DIR_NAME = "student-lab-submissions/2024/boids/submissions"
+// val TARGET_FILES = Seq("src/main/scala/boids/BoidLogic.scala")
+
 import java.io.File
 import java.nio.file.{
   Files,
@@ -37,8 +46,20 @@ object CheckTool:
       diffDir: Path,
       lintDir: Path,
       tmpDir: Path,
-      targetFile: String,
-      targetRelPath: Path
+      targetFiles: Seq[Path]
+  )
+
+  case class Rule(
+      name: String,
+      description: String
+  )
+
+  case class FileContext(
+      fileName: String,
+      labPath: Path,
+      subPath: Path,
+      preSnap: Path,
+      postSnap: Path
   )
 
   def checkStudent(studentDir: Path, cfg: Config): CheckResult = {
@@ -50,28 +71,32 @@ object CheckTool:
         case None    => return NoSubmission(studentId)
 
     val attempt = attemptDir.getFileName.toString.toInt
-    val submissionFile = attemptDir.resolve(cfg.targetFile)
-
-    if (!Files.exists(submissionFile))
-      return logAndReturn(
-        MissingFiles(studentId, attempt, Seq(cfg.targetFile))
-      )
-
-    // Context for this specific attempt
-    val targetFilePath =
-      cfg.labDir.resolve(cfg.targetRelPath).resolve(cfg.targetFile)
-    val tmpOriginal = cfg.tmpDir.resolve(s"$studentId.original")
-    val tmpRefactored = cfg.tmpDir.resolve(s"$studentId.refactored")
-    val diffOut = cfg.diffDir.resolve(s"$studentId-$attempt.diff")
     val lintReport = cfg.lintDir.resolve(s"$studentId-$attempt.lint.txt")
 
-    try {
-      Files.createDirectories(targetFilePath.getParent)
-      Files.copy(
-        submissionFile,
-        targetFilePath,
-        StandardCopyOption.REPLACE_EXISTING
+    val contexts = cfg.targetFiles.map { labPath =>
+      val fileName = labPath.getFileName.toString
+      FileContext(
+        fileName = fileName,
+        labPath = labPath,
+        subPath = attemptDir.resolve(fileName),
+        preSnap = cfg.tmpDir.resolve(s"$studentId.pre-$fileName"),
+        postSnap = cfg.tmpDir.resolve(s"$studentId.post-$fileName")
       )
+    }
+
+    val missing =
+      contexts.filter(ctx => !Files.exists(ctx.subPath)).map(_.fileName)
+    if (missing.nonEmpty) then
+      return logAndReturn(MissingFiles(studentId, attempt, missing))
+
+    try {
+      contexts.foreach { ctx =>
+        Files.copy(
+          ctx.subPath,
+          ctx.labPath,
+          StandardCopyOption.REPLACE_EXISTING
+        )
+      }
 
       // Compile
       if (!compile(cfg.labDir))
@@ -79,30 +104,41 @@ object CheckTool:
 
       // Format and snapshot original
       formatCode(cfg.labDir)
-      Files.copy(
-        targetFilePath,
-        tmpOriginal,
-        StandardCopyOption.REPLACE_EXISTING
-      )
+      contexts.foreach { ctx =>
+        Files.copy(
+          ctx.labPath,
+          ctx.preSnap,
+          StandardCopyOption.REPLACE_EXISTING
+        )
+      }
 
       // Linting check
-      val (lintCode, lintOut) = runScalafix(cfg.labDir)
+      val (lintCode, lintOut) = runScalafix(cfg.labDir, cfg)
       val rules = processLintReport(lintOut, lintReport, cfg.labDir)
 
       // Apply fixes, reformat
       formatCode(cfg.labDir)
-      Files.copy(
-        targetFilePath,
-        tmpRefactored,
-        StandardCopyOption.REPLACE_EXISTING
-      )
+      contexts.foreach { ctx =>
+        Files.copy(
+          ctx.labPath,
+          ctx.postSnap,
+          StandardCopyOption.REPLACE_EXISTING
+        )
+      }
 
       // Compare results
-      val hasDiff = diff(tmpOriginal, tmpRefactored, diffOut).isDefined
+      val anyChange = contexts
+        .map { ctx =>
+          val diffOut = cfg.diffDir.resolve(
+            s"$studentId-$attempt-${ctx.labPath.getFileName}.diff"
+          )
+          diff(ctx.preSnap, ctx.postSnap, diffOut).isDefined
+        }
+        .contains(true)
 
-      val issuesFound = Files.exists(lintReport) || hasDiff
+      val issuesFound = Files.exists(lintReport) || anyChange
       if (issuesFound) then
-        val issueCounts = rules.groupBy(identity).view.mapValues(_.size).toMap
+        val issueCounts = rules.groupBy(_.name).view.mapValues(_.size).toMap
         logAndReturn(IssuesFound(studentId, attempt, issueCounts))
       else logAndReturn(Success(studentId, attempt))
 
@@ -113,21 +149,28 @@ object CheckTool:
         )
         CompileError(studentId, attempt)
     } finally {
-      // Cleanup attempt files
-      List(targetFilePath, tmpOriginal, tmpRefactored).foreach(
-        Files.deleteIfExists
-      )
+      // Cleanup attempt
+      contexts.foreach { ctx =>
+        Files.deleteIfExists(ctx.labPath)
+        Files.deleteIfExists(ctx.preSnap)
+        Files.deleteIfExists(ctx.postSnap)
+      }
     }
   }
 
-  def runScalafix(labDir: Path): (Int, String) = {
+  def runScalafix(labDir: Path, cfg: Config): (Int, String) = {
     val output = new StringBuilder
     val logger = ProcessLogger(
       (s: String) => output.append(s).append('\n'),
       (e: String) => output.append(e).append('\n')
     )
-    val command =
-      Seq("sbt", "--client", "scalafix MetaRule")
+
+    val fileArgs = cfg.targetFiles.map(f => s"--files=$f").mkString(" ")
+    val command = Seq(
+      "sbt",
+      "--client",
+      "scalafix MetaRule " + fileArgs
+    )
     val exitCode = Process(command, labDir.toFile).!(logger)
     (exitCode, output.toString())
   }
@@ -204,7 +247,7 @@ object CheckTool:
       output: String,
       reportFile: Path,
       root: Path
-  ): Seq[String] = {
+  ): Seq[Rule] = {
     val rootPrefix = root.toString + File.separator
     val lines = output
       .replaceAll("\\e\\[[\\d;]*[^\\d;]", "") // Remove ANSI codes
@@ -244,7 +287,9 @@ object CheckTool:
         None
     }
 
-    val foundRules = issueBlock.map(_.ruleName)
+    val foundRules = issueBlock.map(issue =>
+      Rule(issue.ruleName, issue.message)
+    )
 
     val report = issueBlock
       .groupBy( // rule name and message
@@ -386,21 +431,13 @@ object CheckTool:
     val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd_HH.mm.ss")
     val timestamp = LocalDateTime.now().format(formatter)
 
-    // --- CONFIGURATION ---
-    val LAB_DIR_NAME = "find"
-    val SUBMISSIONS_DIR_NAME = "student-lab-submissions/2024/find/submissions"
-    val TARGET_FILE = "find.scala"
-    val TARGET_PATH =
-      Paths.get("src", "main", "scala", "find") // Relative to LAB_DIR
-
     val cfg = Config(
       labDir = ROOT.resolve(LAB_DIR_NAME),
       submissionsDir = ROOT.resolve(SUBMISSIONS_DIR_NAME),
       diffDir = ROOT.resolve(s"grading_diffs_$timestamp"),
       lintDir = ROOT.resolve(s"grading_reports_$timestamp"),
       tmpDir = ROOT.resolve("tmp"),
-      targetFile = TARGET_FILE,
-      targetRelPath = TARGET_PATH
+      targetFiles = TARGET_FILES.map(f => ROOT.resolve(LAB_DIR_NAME).resolve(f))
     )
 
     List(

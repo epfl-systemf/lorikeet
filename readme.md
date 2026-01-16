@@ -163,7 +163,7 @@ rules = [
 
 - `name`: The name of the rule, used to identify it when running scalafix.
 - `pattern`: The query pattern to match in the code. See Matcher section below for syntax.
-- `rewrite`: The template to use for rewriting matched code. See Rewriter section below for syntax.
+- `rewrite` (optional): The template to use for rewriting matched code. See Rewriter section below for syntax. If omitted, Scalafix will only report matches without rewriting them.
 - `description` (optional): A description of the rule, used for feedback messages.
 - `match-ascriptions` (optional, default: false): If true, type ascriptions in the pattern are matched syntactically rather than semantically. See Matcher section below for details.
 

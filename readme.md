@@ -107,8 +107,8 @@ The script output will be individual diffs for each submissions, as well as indi
 The console output looks something like this:
 
 ```text
-Diffs directory: /home/sidonie/Data/Academique/MA3/CodeQualityFeedback/evaluating/grading_diffs_2026.01.01_14.26.00
-Lint reports directory: /home/sidonie/Data/Academique/MA3/CodeQualityFeedback/evaluating/grading_reports_2026.01.01_14.26.00
+Diffs directory: ~evaluating/grading_diffs_2026.01.01_14.26.00
+Lint reports directory: ~/evaluating/grading_reports_2026.01.01_14.26.00
 
 Starting grading process...
 
@@ -127,15 +127,15 @@ Starting grading process...
 Total submissions: 421
 Submissions with missing file: 0
 Submissions with compile errors: 1
-Submissions failing check: 373
+Submissions failing check: 378
 
 --- STATISTICS ---
 Submissions with Matches:
-  If Simplification: 255
-  Var Usage: 130
+  If Simplification: 267
+  Var Usage: 135
 Total Rule Matches:
-  If Simplification: 2466
-  Var Usage: 715
+  If Simplification: 2609
+  Var Usage: 752
 
 Grading complete.
 ```
@@ -188,7 +188,7 @@ Patterns Blocks are surrounded by `?{...}`. Everything inside the braces will be
 | ---------------------- | ----------- | --------------------------------------------------------------- |
 | `_`                    | Wildcard    | Matches anything                                                |
 | `pat1 \| pat2`         | Alternative | Matches if the candidate matches either `pat1` or `pat2`        |
-| `+term`                | Escape      | Matched if the candidate matches the `term` literally           |
+| `+expr`                | Escape      | Matched if the candidate matches the `expr` literally           |
 | `ident := pat`         | Binding     | Matches `pat` and binds the capture to `ident`                  |
 | `pat including (uses)` | Including   | Matches `pat` and satisfies symbol count conditions (see below) |
 
@@ -196,12 +196,12 @@ Patterns Blocks are surrounded by `?{...}`. Everything inside the braces will be
 
 The `uses` inside an `including` pattern specify constraints on the number of times certain symbols must appear in the matched tree. It is a comma-separated list of symbol count conditions of the form below:
 
-| Syntax     | Example     | Description                                   |
-| :--------- | :---------- | :-------------------------------------------- |
-| `s`        | `?x`        | Matches if symbol s is present at least once. |
-| `n s`      | `3 ?x`      | Matches if symbol s appears exactly n times.  |
-| `s min(n)` | `?x min(1)` | Matches if symbol s appears at least n times. |
-| `s max(n)` | `?x max(1)` | Matches if symbol s appears at most n times.  |
+| Syntax     | Example          | Description                                   |
+| :--------- | :--------------- | :-------------------------------------------- |
+| `s`        | `` `?x` ``       | Matches if symbol s is present at least once. |
+| `n s`      | ``3 `?x` ``      | Matches if symbol s appears exactly n times.  |
+| `min(n) s` | ``min(1) `?x` `` | Matches if symbol s appears at least n times. |
+| `max(n) s` | ``max(1) `?x` `` | Matches if symbol s appears at most n times.  |
 
 Note that `s` can be any Scala identifier, or a metavariables (like  `` `?f` ``).
 
@@ -241,6 +241,7 @@ Referencing a binding that was not created in the Matcher will result in an erro
 
 - **Top-level matches only**: To prevent overlapping patches (which can break code), the tool only considers top-level matches. If a match is found inside another match, only the outer (parent) match is rewritten. You may need to run Scalafix multiple times to catch all nested smells.
 - **Binding limits**: Currently, the tool cannot bind a semantic type to a metavariable if that type was inferred (not explicitly written in code).
+- **Scalafix Bug**: the script may occasionally (~1 in 100) fail to generate a lint report due to an upstream issue, even if the rewrite is successful
 
 ## Planned
 

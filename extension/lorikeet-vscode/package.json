@@ -1,0 +1,25 @@
+{
+  "name": "lorikeet-vscode",
+  "displayName": "Lorikeet",
+  "description": "Syntax highlighting and DSL support for Lorikeet rule files",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "lorikeet",
+      "aliases": ["Lorikeet", "lorikeet"],
+      "extensions": [".lorikeet.conf"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "lorikeet",
+      "scopeName": "source.lorikeet",
+      "path": "./syntaxes/lorikeet.tmLanguage.json"
+    }]
+  }
+}

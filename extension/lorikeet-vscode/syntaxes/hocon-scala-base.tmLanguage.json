@@ -1,0 +1,192 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "HOCON with embedded Scala",
+  "scopeName": "source.lorikeet",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#includes"
+    },
+    {
+      "include": "#key-value"
+    },
+    {
+      "include": "#substitutions"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#booleans"
+    },
+    {
+      "include": "#null"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#arrays"
+    },
+    {
+      "include": "#objects"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "match": "(//).*$\\n?",
+          "name": "comment.line.double-slash.hocon"
+        },
+        {
+          "match": "(#).*$\\n?",
+          "name": "comment.line.number-sign.hocon"
+        }
+      ]
+    },
+    "includes": {
+      "patterns": [
+        {
+          "name": "meta.include.hocon",
+          "begin": "^\\s*(include)\\s+",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.include.hocon" }
+          },
+          "end": "(?=,|\\}|$)",
+          "patterns": [
+            {
+              "name": "meta.include.resource.hocon",
+              "match": "(required\\()?\\s*(url|file|classpath)?\\s*\\(?(\"[^\"]*\")\\)?\\)?",
+              "captures": {
+                "1": { "name": "keyword.other.include.required.hocon" },
+                "2": { "name": "keyword.other.include.resource-type.hocon" },
+                "3": { "name": "string.quoted.double.include-resource.hocon" }
+              }
+            },
+            {
+              "name": "string.quoted.double.include-resource.hocon",
+              "match": "\"[^\"]*\""
+            }
+          ]
+        },
+        {
+          "name": "variable.other.key.hocon",
+          "match": "\\b(include)\\b(?!\\s*(\"|\\.))(?=\\s*:)",
+          "captures": {
+            "1": { "name": "string.unquoted.key.hocon" }
+          }
+        }
+      ]
+    },
+    "key-value": {
+      "patterns": [
+        {
+          "name": "meta.key-value.hocon",
+          "begin": "^\\s*(\"?[\\w.-]+\"?)\\s*(?=(=|:|\\{))",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.key.hocon" }
+          },
+          "end": "(?=,|\\}|$)",
+          "patterns": [
+            {
+              "include": "#substitutions"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#booleans"
+            },
+            {
+              "include": "#null-value"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#objects"
+            },
+            {
+              "include": "#arrays"
+            }
+          ]
+        }
+      ]
+    },
+    "substitutions": {
+      "name": "variable.other.hocon",
+      "match": "\\$\\{[^\\}]+\\}"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.hocon",
+          "begin": "\"\"\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.hocon" }
+          },
+          "end": "\"\"\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.hocon" }
+          },
+          "contentName": "meta.embedded.scala",
+          "patterns": [
+            {
+              "include": "source.scala"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.hocon",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.hocon",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.unquoted.hocon",
+          "match": "[^\\s\\{\\}\\[\\]\\,\\:\\=\\+\\#\\`\\^\\?\\!\\@\\*\\&\\\\]+"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.hocon",
+      "match": "-?(0|[1-9]\\d*)(\\.\\d+)?([eE][+-]?\\d+)?"
+    },
+    "booleans": {
+      "name": "constant.language.hocon",
+      "match": "\\b(true|false)\\b"
+    },
+    "null": {
+      "name": "constant.language.hocon",
+      "match": "\\bnull\\b"
+    },
+    "arrays": {
+      "begin": "\\[",
+      "end": "\\]",
+      "name": "meta.structure.array.hocon",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "objects": {
+      "begin": "\\{",
+      "end": "\\}",
+      "name": "meta.structure.dictionary.hocon",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    }
+  }
+}

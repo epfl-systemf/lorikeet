@@ -9,17 +9,114 @@
   "categories": [
     "Programming Languages"
   ],
+  "extensionDependencies": [
+    "scala-lang.scala"
+  ],
   "contributes": {
-    "languages": [{
-      "id": "lorikeet",
-      "aliases": ["Lorikeet", "lorikeet"],
-      "extensions": [".lorikeet.conf"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "lorikeet",
-      "scopeName": "source.lorikeet",
-      "path": "./syntaxes/lorikeet.tmLanguage.json"
-    }]
+    "languages": [
+      {
+        "id": "lorikeet",
+        "aliases": [
+          "Lorikeet"
+        ],
+        "extensions": [
+          ".lorikeet.conf"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "lorikeet",
+        "scopeName": "source.lorikeet",
+        "path": "./syntaxes/hocon-scala-base.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.scala": "scala"
+        }
+      },
+      {
+        "scopeName": "lorikeet.injection",
+        "path": "./syntaxes/lorikeet.tmLanguage.json",
+        "injectTo": [
+          "source.lorikeet"
+        ]
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "keyword.other.key.hocon",
+            "settings": {
+              "foreground": "#88acc9"
+            }
+          },
+          {
+            "scope": [
+              "string.quoted.double.hocon",
+              "string.quoted.triple.hocon"
+            ],
+            "settings": {
+              "foreground": "#d1a290"
+            }
+          },
+          {
+            "scope": "variable.other.metavariable.lorikeet",
+            "settings": {
+              "foreground": "#e9be8c",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "keyword.operator.substitute.lorikeet",
+            "settings": {
+              "foreground": "#a782d4",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": [
+              "punctuation.definition.block.tag.lorikeet"
+            ],
+            "settings": {
+              "foreground": "#e9be8c",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "keyword.operator.bind.lorikeet",
+            "settings": {
+              "foreground": "#a782d4",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "keyword.control.lorikeet",
+            "settings": {
+              "foreground": "#a782d4"
+            }
+          },
+          {
+            "scope": "constant.numeric.uses.lorikeet",
+            "settings": {
+              "foreground": "#a3e57f"
+            }
+          },
+          {
+            "scope": "support.function.uses.lorikeet",
+            "settings": {
+              "foreground": "#a3e57f"
+            }
+          },
+          {
+            "scope": "variable.language.wildcard.lorikeet",
+            "settings": {
+              "foreground": "#a782d4",
+              "fontStyle": "bold"
+            }
+          }
+        ]
+      }
+    }
   }
 }

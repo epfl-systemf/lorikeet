@@ -1,32 +1,69 @@
 {
-	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "Lorikeet",
-	"patterns": [
-		{
-			"include": "#keywords"
-		},
-		{
-			"include": "#strings"
-		}
-	],
-	"repository": {
-		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.lorikeet",
-				"match": "\\b(if|while|for|return)\\b"
-			}]
-		},
-		"strings": {
-			"name": "string.quoted.double.lorikeet",
-			"begin": "\"",
-			"end": "\"",
-			"patterns": [
-				{
-					"name": "constant.character.escape.lorikeet",
-					"match": "\\\\."
-				}
-			]
-		}
-	},
-	"scopeName": "source.lorikeet"
+  "scopeName": "lorikeet.injection",
+  "injectionSelector": "L:meta.embedded.scala",
+  "patterns": [
+    {
+      "comment": "Metavariables",
+      "name": "variable.other.metavariable.lorikeet",
+      "match": "`\\?[a-zA-Z0-9]+`|\\?[a-zA-Z0-9]+"
+    },
+    {
+      "comment": "Substitute Arrow",
+      "name": "keyword.operator.substitute.lorikeet",
+      "match": "-->"
+    },
+    {
+      "comment": "Pattern Blocks",
+      "begin": "(\\?)\\{",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.block.tag.lorikeet" },
+        "0": { "name": "punctuation.section.block.begin.lorikeet" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.lorikeet" }
+      },
+      "patterns": [
+        {
+          "comment": "Bind",
+          "name": "keyword.operator.bind.lorikeet",
+          "match": ":="
+        },
+        {
+          "comment": "Including",
+          "begin": "\\b(including)\\b\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.lorikeet" },
+            "2": { "name": "punctuation.section.group.begin.lorikeet" }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": { "name": "punctuation.section.group.end.lorikeet" }
+          },
+          "patterns": [
+            {
+              "comment": "Number of uses",
+              "match": "\\G\\s*(?:\\b(max|min)\\b\\s*(\\()\\s*([0-9]+)\\s*(\\))|([0-9]+))",
+              "captures": {
+                "1": { "name": "support.function.uses.lorikeet" },
+                "2": { "name": "punctuation.section.uses.begin.lorikeet" },
+                "3": { "name": "constant.numeric.uses.lorikeet" },
+                "4": { "name": "punctuation.section.uses.end.lorikeet" },
+                "5": { "name": "constant.numeric.uses.lorikeet" }
+              }
+            },
+            { "include": "source.scala" }
+          ]
+        },
+        {
+          "comment": "Wildcard",
+          "name": "variable.language.wildcard.lorikeet",
+          "match": "\\b(_)\\b"
+        },
+        {
+          "include": "source.scala"
+        }
+      ]
+    }
+  ]
 }

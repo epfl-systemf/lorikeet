@@ -35,7 +35,7 @@ object Config:
 
   def parseRulesConfig(): List[CustomRule] =
     val configFile = sys.env.get("RULES_CONF") match
-      case None           => ".rewriter.conf"
+      case None           => ".lorikeet.conf"
       case Some(filename) => filename
 
     val configResults: Either[ConfigReaderFailures, RulesConfig] =

@@ -71,7 +71,7 @@ Optionally, if you need to test and modify your rules, disable scalafix caching 
 scalafixCaching := false
 ```
 
-This is because sbt task caching will avoid rerunning a task that has already been run with the same arguments and scala input files, but changes to the custom rules configuration file `.rewriter.conf` are not considered and would not trigger a re-run of scalafix.
+This is because sbt task caching will avoid rerunning a task that has already been run with the same arguments and scala input files, but changes to the custom rules configuration file `.lorikeet.conf` are not considered and would not trigger a re-run of scalafix.
 
 ### Running a Check on Student Submissions
 
@@ -144,7 +144,7 @@ See the configuration options at the top of the script.
 
 ## Writing Rules
 
-The structure of the configuration file `.rewriter.conf` is as follows:
+The structure of the configuration file `.lorikeet.conf` is as follows:
 
 ```hocon
 rules = [

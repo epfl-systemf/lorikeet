@@ -57,7 +57,7 @@ case class Rewriter()(using
         baseTree match
           case Some(b) =>
             tree.transform {
-              case x if Bindings.sameBinding(x, b) => subst
+              case x if Bindings.isEquivalent(x, b) => subst
             }
           case _ =>
             throw new Exception(

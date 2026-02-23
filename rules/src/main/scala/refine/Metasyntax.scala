@@ -25,8 +25,8 @@ object Metasyntax:
         Some(arg)
       case _ => None
 
-  /** Symbol binding for term or types: `?name` */
-  object SymbolBind:
+  /** Metavariable - Symbol binding for term or types: `?name` */
+  object MetaVar:
     def unapply(tree: Tree): Option[String] = tree match
       case Term.Name(name) if name.startsWith("?") && name != "?" =>
         Some(name.stripPrefix("?"))
@@ -87,6 +87,56 @@ object Metasyntax:
     def unapply(tree: Tree): Option[(Term.ParamClause, Tree)] = tree match
       case Term.Function.After_4_6_0(pc @ Term.ParamClause(_, _), body) =>
         Some((pc, body))
+      case _ => None
+
+  /** @mult annotation on parameters and arguments */
+  object MultAnnot:
+    def unapply(tree: Tree): Boolean = tree match
+      case Mod.Annot(Init(Type.Name("mult"), _, Seq())) => true
+      case _                                            => false
+
+  object ParamMult:
+    def unapply(tree: Tree): Option[(Option[String], Option[String])] =
+      tree match
+        case Term.Param(
+              // @mult
+              List(MultAnnot()),
+              // parameter name should be metavariable or wildcard
+              paramName: Term.Name,
+              // parameter type should be metavariable or wildcard (if present)
+              Some(decltpe),
+              // no default value
+              None
+            ) =>
+          val name = paramName match
+            case WildcardSymbol() => None
+            case MetaVar(n)       => Some(n)
+            case n =>
+              throw new Exception(
+                s"Invalid parameter name in @mult parameter: ${n}. Expected a metavariable or wildcard name."
+              )
+          val tpe = decltpe match
+            case WildcardSymbol() => None
+            case MetaVar(tpeName) => Some(tpeName)
+            case tpeName =>
+              throw new Exception(
+                s"Invalid type in @mult parameter: ${tpeName}. Expected a metavariable or wildcard type."
+              )
+          Some((name, tpe))
+
+        case Term.Param(List(MultAnnot()), name, tpe, defv) =>
+          throw new Exception(
+            s"Invalid @mult parameter: (${tree}). Expected wildcard/metavariable for both name and type, and no default value."
+          )
+        case _ => None
+
+  object ArgMult:
+    def unapply(tree: Tree): Option[String] = tree match
+      case Term.Annotate(
+            Term.Name(name),
+            List(MultAnnot())
+          ) =>
+        Some(name)
       case _ => None
 
   /** Extractors for special syntax inside pattern blocks

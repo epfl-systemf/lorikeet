@@ -19,9 +19,9 @@ case class Matcher()(using
     pat match
       case Metasyntax.PatternBlock(pattern) =>
         matchWithPattern(pattern, cand, bindings)
-      // Wildcard + binding for symbols
+      // Wildcard + metavariables
       case Metasyntax.WildcardSymbol() => Some(bindings)
-      case Metasyntax.SymbolBind(name) =>
+      case Metasyntax.MetaVar(name) =>
         (pat, cand) match
           case (_: Term, t: Term) => bindings.checkAddTerm(name, t)
           case (_: Type, t: Type) => bindings.checkAddType(name, t)
@@ -64,6 +64,43 @@ case class Matcher()(using
               candParamMods
             )
           case _ => None
+      // Mult Params
+      // no mods (using, implicit)
+      case Term.ParamClause(List(Metasyntax.ParamMult(name, tpe)), None) =>
+        cand match
+          case Term.ParamClause(candParams, None) =>
+            val paramNames = candParams.collect {
+              // For now, require simple parameter structure for candidates
+              // no modifiers, no default values, no ommitted types
+              case Term.Param(Nil, n: Term.Name, Some(_), None) => n
+            }
+            if paramNames.size != candParams.size then None
+            else
+              val types = candParams.flatMap(_.decltpe)
+              val res = (name, tpe) match
+                case (None, None) =>
+                  Some(bindings)
+                case (Some(n), None) =>
+                  bindings.checkAddMultiTerm(n, paramNames)
+                case (None, Some(t)) =>
+                  bindings.checkAddMultiType(t, types)
+                case (Some(n), Some(t)) =>
+                  bindings
+                    .checkAddMultiTerm(n, paramNames)
+                    .flatMap(b => b.checkAddMultiType(t, types))
+              res
+          case _ => None
+
+      // Mult Args
+      // no mods (using...)
+      case Term.ArgClause(List(Metasyntax.ArgMult(name)), None) =>
+        cand match
+          case Term.ArgClause(candArgs, None) =>
+            val res = bindings
+              .checkAddMultiTerm(name.stripPrefix("?"), candArgs)
+            res
+          case _ => None
+
       // General case
       case _ => compareProducts(pat, cand, bindings)
 

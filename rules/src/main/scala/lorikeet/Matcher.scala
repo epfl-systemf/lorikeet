@@ -3,6 +3,8 @@ package lorikeet
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
+import lorikeet.metasyntax.common._
+import lorikeet.metasyntax.pattern._
 
 type MatchResult = Option[Bindings]
 
@@ -17,11 +19,11 @@ case class Matcher()(using
       bindings: Bindings
   ): MatchResult =
     pat match
-      case Metasyntax.PatternBlock(pattern) =>
+      case PatternBlock(pattern) =>
         matchWithPattern(pattern, cand, bindings)
       // Wildcard + metavariables
-      case Metasyntax.WildcardSymbol() => Some(bindings)
-      case Metasyntax.MetaVar(name) =>
+      case WildcardSymbol() => Some(bindings)
+      case MetaVar(name) =>
         (pat, cand) match
           case (_: Term, t: Term) => bindings.checkAddTerm(name, t)
           case (_: Type, t: Type) => bindings.checkAddType(name, t)
@@ -32,10 +34,10 @@ case class Matcher()(using
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead
-      case Metasyntax.WithOptionalType(extPat, patType, typeField)
+      case WithOptionalType(extPat, patType, typeField)
           if !matchOptions.matchAscriptions =>
         cand match
-          case Metasyntax.WithOrWithoutOptionalType(extCand, candType, _) =>
+          case WithOrWithoutOptionalType(extCand, candType, _) =>
             compareWithOptionalAscription(
               extPat,
               extCand,
@@ -45,12 +47,12 @@ case class Matcher()(using
               typeField
             )
           case _ => None
-      case Metasyntax.FunctionWithOptionalParamTypes(
+      case FunctionWithOptionalParamTypes(
             Term.ParamClause(patParams, patParamMods),
             _
           ) if !matchOptions.matchAscriptions =>
         cand match
-          case Metasyntax.FunctionWithOptionalParamTypes(
+          case FunctionWithOptionalParamTypes(
                 Term.ParamClause(candParams, candParamMods),
                 _
               ) =>
@@ -66,7 +68,7 @@ case class Matcher()(using
           case _ => None
       // Mult Params
       // no mods (using, implicit)
-      case Term.ParamClause(List(Metasyntax.ParamMult(name, tpe)), None) =>
+      case Term.ParamClause(List(ParamMult(name, tpe)), None) =>
         cand match
           case Term.ParamClause(candParams, None) =>
             val paramNames = candParams.collect {
@@ -93,7 +95,7 @@ case class Matcher()(using
 
       // Mult Args
       // no mods (using...)
-      case Term.ArgClause(List(Metasyntax.ArgMult(name)), None) =>
+      case Term.ArgClause(List(ArgMult(name)), None) =>
         cand match
           case Term.ArgClause(candArgs, None) =>
             val res = bindings
@@ -232,20 +234,20 @@ case class Matcher()(using
       bindings: Bindings
   ): MatchResult =
     pat match
-      case Metasyntax.InPattern.Escape(arg) =>
+      case InPattern.Escape(arg) =>
         compareTrees(arg, candidate, bindings)
-      case Metasyntax.InPattern.Alternative(a, b) =>
+      case InPattern.Alternative(a, b) =>
         matchWithPattern(a, candidate, bindings) match
           case s @ Some(_) => s
           case None        => matchWithPattern(b, candidate, bindings)
-      case Metasyntax.InPattern.Wildcard() => Some(bindings)
-      case Metasyntax.InPattern.Binding(name, v) =>
+      case InPattern.Wildcard() => Some(bindings)
+      case InPattern.Binding(name, v) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           candidate match
             case t: Term => newBindings.checkAddTerm(name, t)
             case _       => None
         }
-      case Metasyntax.InPattern.Including(v, uses)
+      case InPattern.Including(v, uses)
           if uses.forall(isUsesPattern(_)) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           if checkUses(uses, candidate, newBindings) then Some(newBindings)

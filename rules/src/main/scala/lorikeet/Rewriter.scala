@@ -3,6 +3,8 @@ package lorikeet
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
+import lorikeet.metasyntax.common._
+import lorikeet.metasyntax.rewrite._
 
 case class Rewriter()(using
     doc: SemanticDocument,
@@ -25,7 +27,7 @@ case class Rewriter()(using
       bindings: Bindings
   ): Option[Tree] =
     tree match
-      case Metasyntax.Rewrite.BindId(name) =>
+      case MetaVar(name) =>
         tree match
           case t: Term => Some(bindings.getTermOrThrow(name))
           case t: Type => Some(bindings.getTypeOrThrow(name))
@@ -33,7 +35,7 @@ case class Rewriter()(using
 
   def isSubstitution(tree: Tree): Boolean =
     tree match
-      case Metasyntax.Rewrite.Substitution(_, _) => true
+      case Substitution(_, _) => true
       case _                                     => false
 
   def applySubstitutions(
@@ -51,7 +53,7 @@ case class Rewriter()(using
       bindings: Bindings
   ): Tree =
     substitution match
-      case Metasyntax.Rewrite.Substitution(name, subst) =>
+      case Substitution(name, subst) =>
         val baseTree = extractBinding(Term.Name(name), bindings)
         val substTree = applyBindings(subst, bindings)
         baseTree match

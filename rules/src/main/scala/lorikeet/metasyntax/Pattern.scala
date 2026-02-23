@@ -5,7 +5,6 @@
 package lorikeet.metasyntax.pattern
 
 import scala.meta._
-import lorikeet.metasyntax.common
 import lorikeet.metasyntax.common._
 
 /** Wildcard symbol `?` */
@@ -80,8 +79,8 @@ object FunctionWithOptionalParamTypes:
       Some((pc, body))
     case _ => None
 
-object ParamMult extends common.ParamMult:
-  def transformName(name: Term.Name): Option[String] =
+object ParamMult extends ParamMultBase[Option[String]]:
+  override def transformName(name: Term.Name): Option[String] =
     name match
       case MetaVar(n)       => Some(n)
       case WildcardSymbol() => None
@@ -90,7 +89,7 @@ object ParamMult extends common.ParamMult:
           s"Invalid @mult parameter name: ${name}. Expected a metavariable or wildcard name."
         )
 
-  def transformType(tpe: Type.Name): Option[String] =
+  override def transformType(tpe: Type.Name): Option[String] =
     tpe match
       case MetaVar(t)       => Some(t)
       case WildcardSymbol() => None

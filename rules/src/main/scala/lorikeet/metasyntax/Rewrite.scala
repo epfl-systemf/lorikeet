@@ -7,7 +7,6 @@
 package lorikeet.metasyntax.rewrite
 
 import scala.meta._
-import lorikeet.metasyntax.common
 import lorikeet.metasyntax.common._
 
 /** Substitution syntax: `?name --> substitution` */
@@ -31,18 +30,18 @@ object Substitution:
       Some((name, subst))
     case _ => None
 
-object ParamMult extends common.ParamMult:
-  def transformName(name: Term.Name): Option[String] =
+object ParamMult extends ParamMultBase[String]:
+  override def transformName(name: Term.Name): String =
     name match
-      case MetaVar(n) => Some(n)
+      case MetaVar(n) => n
       case _ =>
         throw new Exception(
           s"Invalid @mult parameter name: ${name}. Expected a metavariable name."
         )
 
-  def transformType(tpe: Type.Name): Option[String] =
+  override def transformType(tpe: Type.Name): String =
     tpe match
-      case MetaVar(t) => Some(t)
+      case MetaVar(t) => t
       case _ =>
         throw new Exception(
           s"Invalid @mult parameter type: ${tpe}. Expected a metavariable type."

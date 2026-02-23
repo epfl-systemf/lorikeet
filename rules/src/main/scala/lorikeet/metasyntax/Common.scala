@@ -33,10 +33,10 @@ object ArgMult:
     case _ => None
 
 /** Base trait for @mult parameter extractors */
-private[metasyntax] trait ParamMult:
-  def transformName(name: Term.Name): Option[String]
-  def transformType(tpe: Type.Name): Option[String]
-  def unapply(tree: Tree): Option[(Option[String], Option[String])] =
+private[metasyntax] trait ParamMultBase[T]:
+  def transformName(name: Term.Name): T
+  def transformType(tpe: Type.Name): T
+  def unapply(tree: Tree): Option[(T, T)] =
     tree match
       case Term.Param(
             // @mult

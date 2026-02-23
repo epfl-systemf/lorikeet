@@ -1,4 +1,4 @@
-# Code Quality Feedback Tool
+# Lorikeet
 
 ## Development
 
@@ -11,7 +11,7 @@ sbt "tests / test"
 ### Publish Locally
 
 ```bash
-sbt "scala-rewrite / publishLocal"
+sbt "lorikeet / publishLocal"
 ```
 
 ## Usage
@@ -32,10 +32,10 @@ addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
 semanticdbEnabled := true
 semanticdbVersion := scalafixSemanticdb.revision
 
-scalafixDependencies += "ch.epfl.sidoniebouthors" % "scala-rewrite_3" % "0.1.0-SNAPSHOT"
+scalafixDependencies += "ch.epfl.sidoniebouthors" % "lorikeet_3" % "0.1.0-SNAPSHOT"
 ```
 
-4. Create a `.rewriter.conf` file in the root of your project with your custom rule configuration (see how to write rules below):
+4. Create a `.lorikeet.conf` file in the root of your project with your custom rule configuration (see how to write rules below):
 
 ```hocon
 rules = [

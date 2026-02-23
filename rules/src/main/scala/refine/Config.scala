@@ -1,4 +1,4 @@
-package refine
+package lorikeet
 
 import scala.meta._
 import scala.meta.dialects.Scala3

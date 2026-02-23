@@ -1,4 +1,4 @@
-package refine
+package lorikeet
 
 import scalafix.v1._
 import scala.meta._

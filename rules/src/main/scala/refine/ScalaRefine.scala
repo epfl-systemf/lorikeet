@@ -1,4 +1,4 @@
-package refine
+package lorikeet
 
 import scalafix.v1._
 import scala.meta._
@@ -31,7 +31,7 @@ case class LintMessage(t: Tree, r: String, m: Option[String])
       case None      => s"[$r] Rule matched."
 }
 
-class ScalaRefine extends SemanticRule("MetaRule"):
+class MetaRule extends SemanticRule("MetaRule"):
 
   def collectTopLevelMatches(
       tree: Tree,

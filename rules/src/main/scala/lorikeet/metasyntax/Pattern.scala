@@ -79,7 +79,7 @@ object FunctionWithOptionalParamTypes:
       Some((pc, body))
     case _ => None
 
-object ParamMult extends ParamMultBase[Option[String]]:
+object MultParam extends MultParamBase[Option[String]]:
   override def transformName(name: Term.Name): Option[String] =
     name match
       case MetaVar(n)       => Some(n)

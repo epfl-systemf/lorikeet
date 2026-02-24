@@ -11,26 +11,31 @@ import lorikeet.metasyntax.common._
 
 /** Substitution syntax: `?name --> substitution` */
 object Substitution:
-  def unapply(tree: Tree): Option[(String, Tree)] = tree match
+  def unapply(tree: Tree): Option[(String, Tree)] = strip(tree) match
     case Term.ApplyInfix.After_4_6_0(
-          Term.Name(name),
+          MetaVar(name),
           Term.Name("-->"),
           _,
           Term.ArgClause(List(subst), _)
         ) =>
       Some((name, subst))
-    case Term.AnonymousFunction(
+    case _ => None
+
+object MultSubstitution:
+  def unapply(tree: Tree): Option[(String, String)] = strip(tree) match
+    case Term.Annotate(
           Term.ApplyInfix.After_4_6_0(
-            Term.Name(name),
+            MetaVar(name),
             Term.Name("-->"),
             _,
-            Term.ArgClause(List(subst), _)
-          )
+            Term.ArgClause(List(MetaVar(subst)), _)
+          ),
+          List(MultAnnot())
         ) =>
       Some((name, subst))
     case _ => None
 
-object ParamMult extends ParamMultBase[String]:
+object MultParam extends MultParamBase[String]:
   override def transformName(name: Term.Name): String =
     name match
       case MetaVar(n) => n

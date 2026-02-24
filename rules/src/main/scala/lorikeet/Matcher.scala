@@ -68,7 +68,7 @@ case class Matcher()(using
           case _ => None
       // Mult Params
       // no mods (using, implicit)
-      case Term.ParamClause(List(ParamMult(name, tpe)), None) =>
+      case Term.ParamClause(List(MultParam(name, tpe)), None) =>
         cand match
           case Term.ParamClause(candParams, None) =>
             val paramNames = candParams.collect {
@@ -95,11 +95,11 @@ case class Matcher()(using
 
       // Mult Args
       // no mods (using...)
-      case Term.ArgClause(List(ArgMult(name)), None) =>
+      case Term.ArgClause(List(MultName(name)), None) =>
         cand match
           case Term.ArgClause(candArgs, None) =>
             val res = bindings
-              .checkAddMultiTerm(name.stripPrefix("?"), candArgs)
+              .checkAddMultiTerm(name, candArgs)
             res
           case _ => None
 
@@ -247,8 +247,7 @@ case class Matcher()(using
             case t: Term => newBindings.checkAddTerm(name, t)
             case _       => None
         }
-      case InPattern.Including(v, uses)
-          if uses.forall(isUsesPattern(_)) =>
+      case InPattern.Including(v, uses) if uses.forall(isUsesPattern(_)) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           if checkUses(uses, candidate, newBindings) then Some(newBindings)
           else None

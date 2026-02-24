@@ -28,7 +28,7 @@ case class Rewriter()(using
           if substitutions.forall(isSubstitution) =>
         applySubstitutions(base, substitutions, bindings)
 
-      case Term.ParamClause(List(ParamMult(name, tpe)), None)
+      case Term.ParamClause(List(MultParam(name, tpe)), None)
           if bindings.getMultiTerm(name).isDefined &&
             bindings.getMultiType(tpe).isDefined =>
         val names = bindings.getMultiTerm(name).get
@@ -48,7 +48,7 @@ case class Rewriter()(using
           }
           Term.ParamClause(params, None)
 
-      case Term.ArgClause(List(ArgMult(name)), None)
+      case Term.ArgClause(List(MultName(name)), None)
           if bindings.getMultiTerm(name).isDefined =>
         val args = bindings.getMultiTerm(name).get
         Term.ArgClause(args, None)
@@ -58,8 +58,9 @@ case class Rewriter()(using
 
   def isSubstitution(tree: Tree): Boolean =
     tree match
-      case Substitution(_, _) => true
-      case _                  => false
+      case Substitution(_, _)     => true
+      case MultSubstitution(_, _) => true
+      case _                      => false
 
   def applySubstitutions(
       tree: Tree,
@@ -79,14 +80,22 @@ case class Rewriter()(using
     substitution match
       case Substitution(name, subst) =>
         val substTree = applyBindings(subst, bindings)
-        Term.Name(name) match
-          case BoundVar(b) =>
-            tree.transform {
-              case x if Bindings.isEquivalent(x, b) => substTree
-            }
-          case _ =>
-            throw new Exception(
-              s"Could not find bindings for substitution: ${substitution.syntax}"
-            )
+        val bound = bindings.getTermOrThrow(name)
+        tree.transform {
+          case x if Bindings.isEquivalent(x, bound) => substTree
+        }
+      case MultSubstitution(name, substName) =>
+        val ogList = bindings.getMultiTermOrThrow(name)
+        val substList = bindings.getMultiTermOrThrow(substName)
+        if ogList.size != substList.size then
+          throw new Exception(
+            s"@mult substitution size mismatch: $name refers to ${ogList.size} terms but $substName provides ${substList.size} terms."
+          )
+        else
+          tree.transform {
+            case n if ogList.exists(t => Bindings.isEquivalent(t, n)) =>
+              val index = ogList.indexWhere(t => Bindings.isEquivalent(t, n))
+              substList(index)
+          }
       case _ =>
         throw new Exception(s"Unsupported substitution: ${substitution.syntax}")

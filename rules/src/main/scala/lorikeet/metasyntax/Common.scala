@@ -23,17 +23,17 @@ private[metasyntax] object MultAnnot:
     case Mod.Annot(Init(Type.Name("mult"), _, Seq())) => true
     case _                                            => false
 
-object ArgMult:
+object MultName:
   def unapply(tree: Tree): Option[String] = tree match
     case Term.Annotate(
-          Term.Name(name),
+          MetaVar(name),
           List(MultAnnot())
         ) =>
       Some(name)
     case _ => None
 
 /** Base trait for @mult parameter extractors */
-private[metasyntax] trait ParamMultBase[T]:
+private[metasyntax] trait MultParamBase[T]:
   def transformName(name: Term.Name): T
   def transformType(tpe: Type.Name): T
   def unapply(tree: Tree): Option[(T, T)] =

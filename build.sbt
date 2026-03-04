@@ -6,10 +6,10 @@ val upickleVersion = "4.4.0"
 
 inThisBuild(
   List(
-    organization := "ch.epfl.sidoniebouthors",
+    organization := "ch.epfl.systemf",
     homepage := Some(
       url(
-        "https://gitlab.epfl.ch/systemf/student-projects/2025-09-code-quality-feedback-tool-for-students"
+        "https://github.com/systemf/lorikeet"
       )
     ),
     developers := List(

@@ -4,13 +4,22 @@ import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
 
-/** Manages variable bindings during matching.
-  *
-  * Bindings track mappings between pattern variables (like ?x, ?T) and the
-  * actual nodes they match
-  */
-object Bindings:
-  val empty: Bindings = Bindings(Map.empty, Map.empty, Map.empty, Map.empty)
+sealed trait Binding:
+  import Binding._
+  def isEquivalentTo(other: Binding)(using SemanticDocument): Boolean =
+    (this, other) match
+      case (TermValue(t1), TermValue(t2)) => isEquivalent(t1, t2)
+      case (TypeValue(t1), TypeValue(t2)) => isEquivalent(t1, t2)
+      case (MultiTermValue(ts1), MultiTermValue(ts2)) =>
+        isSeqEquivalent(ts1, ts2)
+      case (MultiTypeValue(ts1), MultiTypeValue(ts2)) =>
+        isSeqEquivalent(ts1, ts2)
+      case _ => false
+object Binding:
+  case class TermValue(term: Term) extends Binding
+  case class TypeValue(tpe: Type) extends Binding
+  case class MultiTermValue(terms: List[Term]) extends Binding
+  case class MultiTypeValue(types: List[Type]) extends Binding
 
   // Compares two trees for equivalence
   def isEquivalent(t1: Tree, t2: Tree)(using
@@ -26,6 +35,40 @@ object Bindings:
   ): Boolean =
     l1.size == l2.size && l1.zip(l2).forall(isEquivalent)
 
+trait AsBinding[T]:
+  def wrap(value: T): Binding
+  def extract(b: Binding): Option[T]
+
+object AsBinding:
+  given termAsBinding: AsBinding[Term] with
+    def wrap(term: Term) = Binding.TermValue(term)
+    def extract(b: Binding) = b match
+      case Binding.TermValue(t) => Some(t)
+      case _                    => None
+  given typeAsBinding: AsBinding[Type] with
+    def wrap(tpe: Type) = Binding.TypeValue(tpe)
+    def extract(b: Binding) = b match
+      case Binding.TypeValue(t) => Some(t)
+      case _                    => None
+  given multiTermAsBinding: AsBinding[List[Term]] with
+    def wrap(terms: List[Term]) = Binding.MultiTermValue(terms)
+    def extract(b: Binding) = b match
+      case Binding.MultiTermValue(ts) => Some(ts)
+      case _                          => None
+  given multiTypeAsBinding: AsBinding[List[Type]] with
+    def wrap(types: List[Type]) = Binding.MultiTypeValue(types)
+    def extract(b: Binding) = b match
+      case Binding.MultiTypeValue(ts) => Some(ts)
+      case _                          => None
+
+/** Manages variable bindings during matching.
+  *
+  * Bindings track mappings between pattern variables (like ?x, ?T) and the
+  * actual nodes they match
+  */
+object Bindings:
+  def empty(using doc: SemanticDocument): Bindings = Bindings(Map.empty)
+
 /** Map of pattern variables to their matched values.
   *
   * @param terms
@@ -34,68 +77,41 @@ object Bindings:
   *   map from type variable names to matched Type trees
   */
 case class Bindings(
-    terms: Map[String, Tree],
-    types: Map[String, Type],
-    multiTerms: Map[String, List[Term]],
-    multiTypes: Map[String, List[Type]]
-):
-  import Bindings.{isEquivalent, isSeqEquivalent}
-
-  // Private helpers
-
-  private def checkAdd[T](
+    bindings: Map[String, Binding]
+)(using doc: SemanticDocument):
+  def add[T](
       name: String,
-      value: T,
-      currentMap: Map[String, T],
-      equals: (T, T) => Boolean
-  )(update: Map[String, T] => Bindings): Option[Bindings] =
-    currentMap.get(name) match
-      case Some(existing) if equals(existing, value) => Some(this)
-      case Some(_)                                   => None
-      case None => Some(update(currentMap + (name -> value)))
+      value: T
+  )(using format: AsBinding[T]): Option[Bindings] =
+    val newBinding = format.wrap(value)
+    bindings.get(name) match
+      case None =>
+        Some(this.copy(bindings = bindings + (name -> newBinding)))
+      case Some(existing) =>
+        format.extract(existing) match
+          // Equivalent binding, no conflict
+          case Some(existingValue) if existing.isEquivalentTo(newBinding) =>
+            Some(this)
+          // Different binding of the same type, conflict
+          case Some(_) =>
+            None
+          // Different type, error
+          case None =>
+            throw new Exception(
+              s"Binding type mismatch for variable '$name': existing binding is of a different type."
+            )
 
-  private def getOrThrow[T](name: String, opt: Option[T], kind: String): T =
-    opt.getOrElse(
-      throw new Exception(s"No binding found for $kind name: $name")
-    )
+  def get[T](name: String)(using extractor: AsBinding[T]): Option[T] =
+    bindings.get(name) match
+      case Some(b) =>
+        extractor.extract(b) match
+          case Some(value) => Some(value)
+          case None =>
+            throw new Exception(s"Binding type mismatch for '$name'")
+      case None => None
 
-  // Public
-
-  def checkAddTerm(name: String, term: Term)(using
-      SemanticDocument
-  ): Option[Bindings] =
-    checkAdd(name, term, terms, isEquivalent)((m) => this.copy(terms = m))
-
-  def checkAddType(name: String, tpe: Type)(using
-      SemanticDocument
-  ): Option[Bindings] =
-    checkAdd(name, tpe, types, isEquivalent)((m) => this.copy(types = m))
-
-  def checkAddMultiTerm(name: String, ts: List[Term])(using
-      SemanticDocument
-  ): Option[Bindings] =
-    checkAdd(name, ts, multiTerms, isSeqEquivalent)((m) =>
-      this.copy(multiTerms = m)
-    )
-
-  def checkAddMultiType(name: String, ts: List[Type])(using
-      SemanticDocument
-  ): Option[Bindings] =
-    checkAdd(name, ts, multiTypes, isSeqEquivalent)((m) =>
-      this.copy(multiTypes = m)
-    )
-
-  def getTerm(name: String): Option[Term] =
-    terms.get(name).collect { case t: Term => t }
-  def getType(name: String): Option[Type] = types.get(name)
-  def getMultiTerm(name: String): Option[List[Term]] = multiTerms.get(name)
-  def getMultiType(name: String): Option[List[Type]] = multiTypes.get(name)
-
-  def getTermOrThrow(name: String): Term =
-    getOrThrow(name, getTerm(name), "term")
-  def getTypeOrThrow(name: String): Type =
-    getOrThrow(name, getType(name), "type")
-  def getMultiTermOrThrow(name: String): List[Term] =
-    getOrThrow(name, getMultiTerm(name), "multi-term")
-  def getMultiTypeOrThrow(name: String): List[Type] =
-    getOrThrow(name, getMultiType(name), "multi-type")
+  def getOrThrow[T](name: String)(using extractor: AsBinding[T]): T =
+    get(name) match
+      case Some(value) => value
+      case None =>
+        throw new Exception(s"Expected binding for '$name' not found")

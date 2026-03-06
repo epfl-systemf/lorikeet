@@ -25,8 +25,8 @@ case class Matcher()(using
       case WildcardSymbol() => Some(bindings)
       case MetaVar(name) =>
         (pat, cand) match
-          case (_: Term, t: Term) => bindings.checkAddTerm(name, t)
-          case (_: Type, t: Type) => bindings.checkAddType(name, t)
+          case (_: Term, t: Term) => bindings.add[Term](name, t)
+          case (_: Type, t: Type) => bindings.add[Type](name, t)
           case (_: Term, p: Pat)  =>
             // Special handling due to special meaning of backticks in patterns
             compareTrees(Pat.Var(Term.Name("?" + name)), cand, bindings)
@@ -83,13 +83,13 @@ case class Matcher()(using
                 case (None, None) =>
                   Some(bindings)
                 case (Some(n), None) =>
-                  bindings.checkAddMultiTerm(n, paramNames)
+                  bindings.add[List[Term]](n, paramNames)
                 case (None, Some(t)) =>
-                  bindings.checkAddMultiType(t, types)
+                  bindings.add[List[Type]](t, types)
                 case (Some(n), Some(t)) =>
                   bindings
-                    .checkAddMultiTerm(n, paramNames)
-                    .flatMap(b => b.checkAddMultiType(t, types))
+                    .add[List[Term]](n, paramNames)
+                    .flatMap(b => b.add[List[Type]](t, types))
               res
           case _ => None
 
@@ -99,7 +99,7 @@ case class Matcher()(using
         cand match
           case Term.ArgClause(candArgs, None) =>
             val res = bindings
-              .checkAddMultiTerm(name, candArgs)
+              .add[List[Term]](name, candArgs)
             res
           case _ => None
 
@@ -244,7 +244,7 @@ case class Matcher()(using
       case InPattern.Binding(name, v) =>
         matchWithPattern(v, candidate, bindings).flatMap { newBindings =>
           candidate match
-            case t: Term => newBindings.checkAddTerm(name, t)
+            case t: Term => newBindings.add[Term](name, t)
             case _       => None
         }
       case InPattern.Including(v, uses) if uses.forall(isUsesPattern(_)) =>
@@ -284,7 +284,7 @@ case class Matcher()(using
 
     def getTrueName(name: String): Option[String] =
       if name.startsWith("?") then
-        bindings.getTerm(name.stripPrefix("?")) match
+        bindings.get[Term](name.stripPrefix("?")) match
           case Some(Term.Name(n)) => Some(n)
           case Some(_)            => None
           case None => throw new Exception(s"No binding found for name: $name")

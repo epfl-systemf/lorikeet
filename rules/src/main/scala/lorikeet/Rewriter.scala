@@ -16,8 +16,8 @@ case class Rewriter()(using
     def unapply(tree: Tree)(using b: Bindings): Option[Tree] = tree match
       case MetaVar(name) =>
         tree match
-          case t: Term => Some(b.getTermOrThrow(name))
-          case t: Type => Some(b.getTypeOrThrow(name))
+          case t: Term => Some(b.getOrThrow[Term](name))
+          case t: Type => Some(b.getOrThrow[Type](name))
       case _ => None
 
   def applyBindings(tree: Tree, bindings: Bindings): Tree =
@@ -29,10 +29,10 @@ case class Rewriter()(using
         applySubstitutions(base, substitutions, bindings)
 
       case Term.ParamClause(List(MultParam(name, tpe)), None)
-          if bindings.getMultiTerm(name).isDefined &&
-            bindings.getMultiType(tpe).isDefined =>
-        val names = bindings.getMultiTerm(name).get
-        val types = bindings.getMultiType(tpe).get
+          if bindings.get[List[Term]](name).isDefined &&
+            bindings.get[List[Type]](tpe).isDefined =>
+        val names = bindings.get[List[Term]](name).get
+        val types = bindings.get[List[Type]](tpe).get
         if names.size != types.size then
           throw new Exception(
             s"@mult parameter size mismatch: ${names.size} names but ${types.size} types."
@@ -49,8 +49,8 @@ case class Rewriter()(using
           Term.ParamClause(params, None)
 
       case Term.ArgClause(List(MultName(name)), None)
-          if bindings.getMultiTerm(name).isDefined =>
-        val args = bindings.getMultiTerm(name).get
+          if bindings.get[List[Term]](name).isDefined =>
+        val args = bindings.get[List[Term]](name).get
         Term.ArgClause(args, None)
 
       case BoundVar(t) => t
@@ -80,21 +80,21 @@ case class Rewriter()(using
     substitution match
       case Substitution(name, subst) =>
         val substTree = applyBindings(subst, bindings)
-        val bound = bindings.getTermOrThrow(name)
+        val bound = bindings.getOrThrow[Term](name)
         tree.transform {
-          case x if Bindings.isEquivalent(x, bound) => substTree
+          case x if Binding.isEquivalent(x, bound) => substTree
         }
       case MultSubstitution(name, substName) =>
-        val ogList = bindings.getMultiTermOrThrow(name)
-        val substList = bindings.getMultiTermOrThrow(substName)
+        val ogList = bindings.getOrThrow[List[Term]](name)
+        val substList = bindings.getOrThrow[List[Term]](substName)
         if ogList.size != substList.size then
           throw new Exception(
             s"@mult substitution size mismatch: $name refers to ${ogList.size} terms but $substName provides ${substList.size} terms."
           )
         else
           tree.transform {
-            case n if ogList.exists(t => Bindings.isEquivalent(t, n)) =>
-              val index = ogList.indexWhere(t => Bindings.isEquivalent(t, n))
+            case n if ogList.exists(t => Binding.isEquivalent(t, n)) =>
+              val index = ogList.indexWhere(t => Binding.isEquivalent(t, n))
               substList(index)
           }
       case _ =>

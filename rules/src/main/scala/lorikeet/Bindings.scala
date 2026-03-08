@@ -22,13 +22,21 @@ case class SemanticMatcher()(using doc: SemanticDocument)
   def compareFields(pat: Any, cand: Any): Boolean =
     compareFields(pat, cand, Bindings.empty).isDefined
 
-sealed trait Binding
+sealed trait Binding:
+  val handler: AsBinding[?]
 object Binding:
-  case class TermValue(term: Term) extends Binding
-  case class TypeValue(tpe: Type) extends Binding
-  case class MultiTermValue(terms: List[Term]) extends Binding
-  case class MultiNameValue(terms: List[Term.Name]) extends Binding
-  case class MultiTypeValue(types: List[Type]) extends Binding
+  case class TermValue(term: Term) extends Binding:
+    val handler = AsBinding.termAsBinding
+  case class TypeValue(tpe: Type) extends Binding:
+    val handler = AsBinding.typeAsBinding
+  case class MultiTermValue(terms: List[Term]) extends Binding:
+    val handler = AsBinding.multiTermAsBinding
+  case class MultiNameValue(terms: List[Term.Name]) extends Binding:
+    val handler = AsBinding.multiNameAsBinding
+  case class MultiTypeValue(types: List[Type]) extends Binding:
+    val handler = AsBinding.multiTypeAsBinding
+  case class MultiStatValue(stats: List[Stat]) extends Binding:
+    val handler = AsBinding.multiStatAsBinding
 
 trait AsBinding[T]:
   def wrap(value: T): Binding
@@ -64,6 +72,11 @@ object AsBinding:
     def wrap(types: List[Type]) = Binding.MultiTypeValue(types)
     def extract(b: Binding) = b match
       case Binding.MultiTypeValue(ts) => Some(ts)
+      case _                          => None
+  given multiStatAsBinding: AsBinding[List[Stat]] with
+    def wrap(stats: List[Stat]) = Binding.MultiStatValue(stats)
+    def extract(b: Binding) = b match
+      case Binding.MultiStatValue(ss) => Some(ss)
       case _                          => None
 
 /** Manages variable bindings during matching.

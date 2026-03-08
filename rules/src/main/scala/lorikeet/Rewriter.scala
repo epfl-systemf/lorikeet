@@ -25,11 +25,12 @@ case class Rewriter()(using
   def applyBindings(tree: Tree, bindings: Bindings): Tree =
     given Bindings = bindings
     tree.transform {
+      // Substitutions
       case Term.Apply
             .After_4_6_0(BoundVar(base), Term.ArgClause(substitutions, _))
           if substitutions.forall(isSubstitution) =>
         applySubstitutions(base, substitutions, bindings)
-
+      // Mult vars for parameter lists
       case Term.ParamClause(List(MultParam(name, tpe)), None) =>
         val names = bindings.getOrThrow[List[Term.Name]](name)
         val types = bindings.getOrThrow[List[Type]](tpe)
@@ -41,11 +42,15 @@ case class Rewriter()(using
           val params =
             names.zip(types).map((n, t) => Term.Param(Nil, n, Some(t), None))
           Term.ParamClause(params, None)
-
+      // Mult vars for argument lists
       case Term.ArgClause(List(MultName(name)), None) =>
         val args = bindings.getOrThrow[List[Term]](name)
         Term.ArgClause(args, None)
-
+      // Mult vars for statement blocks
+      case Term.Block(List(MultName(name))) =>
+        val stats = bindings.getOrThrow[List[Stat]](name)
+        Term.Block(stats)
+      // Bound variables
       case BoundVar(t) => t
     }
 

@@ -105,6 +105,13 @@ case class Matcher()(using
             bindings.add[List[Term]](name, candArgs)
           case _ => None
 
+      // Mult Statements
+      case Term.Block(List(MultName(name))) =>
+        cand match
+          case Term.Block(candStats) =>
+            bindings.add[List[Stat]](name, candStats)
+          case _ => None
+
       // General case
       case _ => compareProducts(pat, cand, bindings)
 

@@ -11,6 +11,8 @@ case class Rewriter()(using
     matchOptions: MatchOptions
 ):
 
+  val semMatcher = SemanticMatcher()
+
   // Extractor for metavariables that should reference a simple term or type
   private object BoundVar:
     def unapply(tree: Tree)(using b: Bindings): Option[Tree] = tree match
@@ -28,29 +30,20 @@ case class Rewriter()(using
           if substitutions.forall(isSubstitution) =>
         applySubstitutions(base, substitutions, bindings)
 
-      case Term.ParamClause(List(MultParam(name, tpe)), None)
-          if bindings.get[List[Term]](name).isDefined &&
-            bindings.get[List[Type]](tpe).isDefined =>
-        val names = bindings.get[List[Term]](name).get
-        val types = bindings.get[List[Type]](tpe).get
+      case Term.ParamClause(List(MultParam(name, tpe)), None) =>
+        val names = bindings.getOrThrow[List[Term.Name]](name)
+        val types = bindings.getOrThrow[List[Type]](tpe)
         if names.size != types.size then
           throw new Exception(
             s"@mult parameter size mismatch: ${names.size} names but ${types.size} types."
           )
         else
-          val params = names.zip(types).map {
-            case (n: Term.Name, t) =>
-              Term.Param(Nil, n, Some(t), None)
-            case (n, _) =>
-              throw new Exception(
-                s"Invalid @mult parameter bindings: expected metavariable $name to resolve to a name but got ${n.syntax} instead"
-              )
-          }
+          val params =
+            names.zip(types).map((n, t) => Term.Param(Nil, n, Some(t), None))
           Term.ParamClause(params, None)
 
-      case Term.ArgClause(List(MultName(name)), None)
-          if bindings.get[List[Term]](name).isDefined =>
-        val args = bindings.get[List[Term]](name).get
+      case Term.ArgClause(List(MultName(name)), None) =>
+        val args = bindings.getOrThrow[List[Term]](name)
         Term.ArgClause(args, None)
 
       case BoundVar(t) => t
@@ -82,7 +75,7 @@ case class Rewriter()(using
         val substTree = applyBindings(subst, bindings)
         val bound = bindings.getOrThrow[Term](name)
         tree.transform {
-          case x if Binding.isEquivalent(x, bound) => substTree
+          case x if semMatcher.compareTrees(x, bound) => substTree
         }
       case MultSubstitution(name, substName) =>
         val ogList = bindings.getOrThrow[List[Term]](name)
@@ -93,8 +86,8 @@ case class Rewriter()(using
           )
         else
           tree.transform {
-            case n if ogList.exists(t => Binding.isEquivalent(t, n)) =>
-              val index = ogList.indexWhere(t => Binding.isEquivalent(t, n))
+            case n if ogList.exists(t => semMatcher.compareTrees(t, n)) =>
+              val index = ogList.indexWhere(t => semMatcher.compareTrees(t, n))
               substList(index)
           }
       case _ =>

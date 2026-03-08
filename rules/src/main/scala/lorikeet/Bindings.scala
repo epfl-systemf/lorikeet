@@ -4,36 +4,31 @@ import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
 
-sealed trait Binding:
-  import Binding._
-  def isEquivalentTo(other: Binding)(using SemanticDocument): Boolean =
-    (this, other) match
-      case (TermValue(t1), TermValue(t2)) => isEquivalent(t1, t2)
-      case (TypeValue(t1), TypeValue(t2)) => isEquivalent(t1, t2)
-      case (MultiTermValue(ts1), MultiTermValue(ts2)) =>
-        isSeqEquivalent(ts1, ts2)
-      case (MultiTypeValue(ts1), MultiTypeValue(ts2)) =>
-        isSeqEquivalent(ts1, ts2)
-      case _ => false
+/** A semantic matcher to compare trees structurally while also considering
+  * symbol equivalence (SemanticDB)
+  */
+case class SemanticMatcher()(using doc: SemanticDocument)
+    extends AbstractMatcher:
+  def compareTrees(t1: Tree, t2: Tree, bindings: Bindings): Option[Bindings] =
+    (t1.symbol, t2.symbol) match
+      case (Symbol.None, _) | (_, Symbol.None) =>
+        compareProducts(t1, t2, bindings)
+      case (s1, s2) =>
+        if s1 == s2 then compareProducts(t1, t2, bindings) else None
+
+  def compareTrees(a: Tree, b: Tree): Boolean =
+    compareTrees(a, b, Bindings.empty).isDefined
+
+  def compareFields(pat: Any, cand: Any): Boolean =
+    compareFields(pat, cand, Bindings.empty).isDefined
+
+sealed trait Binding
 object Binding:
   case class TermValue(term: Term) extends Binding
   case class TypeValue(tpe: Type) extends Binding
   case class MultiTermValue(terms: List[Term]) extends Binding
+  case class MultiNameValue(terms: List[Term.Name]) extends Binding
   case class MultiTypeValue(types: List[Type]) extends Binding
-
-  // Compares two trees for equivalence
-  def isEquivalent(t1: Tree, t2: Tree)(using
-      doc: SemanticDocument
-  ): Boolean =
-    (t1.symbol, t2.symbol) match
-      case (Symbol.None, _) | (_, Symbol.None) => t1.structure == t2.structure
-      case (s1, s2) => s1 == s2 && t1.structure == t2.structure
-
-  // Compares two sequences of trees element-wise
-  def isSeqEquivalent(l1: List[Tree], l2: List[Tree])(using
-      doc: SemanticDocument
-  ): Boolean =
-    l1.size == l2.size && l1.zip(l2).forall(isEquivalent)
 
 trait AsBinding[T]:
   def wrap(value: T): Binding
@@ -54,7 +49,17 @@ object AsBinding:
     def wrap(terms: List[Term]) = Binding.MultiTermValue(terms)
     def extract(b: Binding) = b match
       case Binding.MultiTermValue(ts) => Some(ts)
+      case Binding.MultiNameValue(ts) => Some(ts)
       case _                          => None
+  given multiNameAsBinding: AsBinding[List[Term.Name]] with
+    def wrap(terms: List[Term.Name]) = Binding.MultiNameValue(terms)
+    def extract(b: Binding) = b match
+      case Binding.MultiNameValue(ts) => Some(ts)
+      case Binding.MultiTermValue(ts) =>
+        // Extract Term.Names from Terms if possible
+        val names = ts.collect { case Term.Name(name) => Term.Name(name) }
+        if (names.size == ts.size) then Some(names) else None
+      case _ => None
   given multiTypeAsBinding: AsBinding[List[Type]] with
     def wrap(types: List[Type]) = Binding.MultiTypeValue(types)
     def extract(b: Binding) = b match
@@ -79,6 +84,9 @@ object Bindings:
 case class Bindings(
     bindings: Map[String, Binding]
 )(using doc: SemanticDocument):
+
+  val semMatcher = SemanticMatcher()
+
   def add[T](
       name: String,
       value: T
@@ -90,10 +98,11 @@ case class Bindings(
       case Some(existing) =>
         format.extract(existing) match
           // Equivalent binding, no conflict
-          case Some(existingValue) if existing.isEquivalentTo(newBinding) =>
+          case Some(existingValue)
+              if semMatcher.compareFields(existingValue, value) =>
             Some(this)
           // Different binding of the same type, conflict
-          case Some(_) =>
+          case Some(existingValue) =>
             None
           // Different type, error
           case None =>
@@ -107,7 +116,9 @@ case class Bindings(
         extractor.extract(b) match
           case Some(value) => Some(value)
           case None =>
-            throw new Exception(s"Binding type mismatch for '$name'")
+            throw new Exception(
+              s"Binding type mismatch for '$name': binding is used as a different type than it was bound with."
+            )
       case None => None
 
   def getOrThrow[T](name: String)(using extractor: AsBinding[T]): T =

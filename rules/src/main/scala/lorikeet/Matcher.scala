@@ -11,7 +11,7 @@ type MatchResult = Option[Bindings]
 case class Matcher()(using
     doc: SemanticDocument,
     matchOptions: MatchOptions
-):
+) extends AbstractMatcher:
 
   def compareTrees(
       pat: Tree,
@@ -79,18 +79,22 @@ case class Matcher()(using
             if paramNames.size != candParams.size then None
             else
               val types = candParams.flatMap(_.decltpe)
-              val res = (name, tpe) match
-                case (None, None) =>
-                  Some(bindings)
-                case (Some(n), None) =>
-                  bindings.add[List[Term]](n, paramNames)
-                case (None, Some(t)) =>
-                  bindings.add[List[Type]](t, types)
-                case (Some(n), Some(t)) =>
-                  bindings
-                    .add[List[Term]](n, paramNames)
-                    .flatMap(b => b.add[List[Type]](t, types))
-              res
+              val bindingsWithNames =
+                name match
+                  case None    => Some(bindings)
+                  case Some(n) => bindings.add[List[Term.Name]](n, paramNames)
+              val bindingsWithTypes =
+                tpe match
+                  case None => bindingsWithNames
+                  case Some(t) =>
+                    bindingsWithNames.flatMap(b => b.add[List[Type]](t, types))
+
+              bindingsWithTypes match
+                case Some(b) =>
+                  Some(b)
+                case None =>
+                  None
+
           case _ => None
 
       // Mult Args
@@ -98,9 +102,7 @@ case class Matcher()(using
       case Term.ArgClause(List(MultName(name)), None) =>
         cand match
           case Term.ArgClause(candArgs, None) =>
-            val res = bindings
-              .add[List[Term]](name, candArgs)
-            res
+            bindings.add[List[Term]](name, candArgs)
           case _ => None
 
       // General case
@@ -182,51 +184,6 @@ case class Matcher()(using
         // Compare body
         compareProducts(pat, cand, newBindings, Set("paramClause"))
       )
-
-  def compareProducts(
-      pat: Product,
-      cand: Product,
-      bindings: Bindings,
-      skipFields: Set[String] = Set.empty
-  ): MatchResult =
-    val prodStruc =
-      pat.productPrefix == cand.productPrefix &&
-        pat.productArity == cand.productArity
-
-    if (prodStruc)
-    then
-      pat.productIterator
-        .zip(cand.productIterator)
-        .zip(pat.productElementNames)
-        .foldLeft[MatchResult](Some(bindings)) {
-          case (None, _) => None
-          case (Some(b), ((p, c), name)) =>
-            if skipFields.contains(name) then Some(b)
-            else compareFields(p, c, b)
-        }
-    else None
-
-  def compareFields(pat: Any, cand: Any, bindings: Bindings): MatchResult =
-    (pat, cand) match
-      // Trees
-      case (p: Tree, c: Tree) => compareTrees(p, c, bindings)
-      // Options
-      case (Some(pv), Some(cv))              => compareFields(pv, cv, bindings)
-      case (None, None)                      => Some(bindings)
-      case (Some(_), None) | (None, Some(_)) => None
-      // Iterables
-      case (p: Iterable[_], c: Iterable[_]) =>
-        if p.size == c.size then
-          p.zip(c).foldLeft[MatchResult](Some(bindings)) {
-            case (None, _)           => None
-            case (Some(b), (pp, cp)) => compareFields(pp, cp, b)
-          }
-        else None
-      // Other fields
-      case _ => if pat == cand then Some(bindings) else None
-
-      // NOTE : Perhaps we don't want to use "Iterable" above, as it may
-      // not be the right behavior for certain things like Strings...
 
   def matchWithPattern(
       pat: Tree,

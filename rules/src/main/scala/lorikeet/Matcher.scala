@@ -68,48 +68,82 @@ case class Matcher()(using
           case _ => None
       // Mult Params
       // no mods (using, implicit)
-      case Term.ParamClause(List(MultParam(name, tpe)), None) =>
+      case Term.ParamClause(patParams, None) =>
         cand match
           case Term.ParamClause(candParams, None) =>
-            val paramNames = candParams.collect {
-              // For now, require simple parameter structure for candidates
-              // no modifiers, no default values, no ommitted types
-              case Term.Param(Nil, n: Term.Name, Some(_), None) => n
-            }
-            if paramNames.size != candParams.size then None
-            else
-              val types = candParams.flatMap(_.decltpe)
-              val bindingsWithNames =
-                name match
-                  case None    => Some(bindings)
-                  case Some(n) => bindings.add[List[Term.Name]](n, paramNames)
-              val bindingsWithTypes =
-                tpe match
-                  case None => bindingsWithNames
-                  case Some(t) =>
-                    bindingsWithNames.flatMap(b => b.add[List[Type]](t, types))
-
-              bindingsWithTypes match
-                case Some(b) =>
-                  Some(b)
-                case None =>
-                  None
+            MultMatching.matchListWithMults(
+              patParams,
+              candParams,
+              bindings,
+              {
+                case MultParam(_, _) => true
+                case _                => false
+              },
+              (multPat, taken, b) =>
+                multPat match
+                  case MultParam(name, tpe) =>
+                    val names = taken.collect {
+                      // For now, require simple parameter structure for candidates
+                      // no modifiers, no default values, no ommitted types
+                      case Term.Param(Nil, n: Term.Name, Some(_), None) => n
+                    }
+                    val types = taken.flatMap(_.decltpe)
+                    if names.size != taken.size || types.size != taken.size then
+                      None
+                    else
+                      val bindingsWithNames = name match
+                          case None    => Some(bindings)
+                          case Some(n) => bindings.add[List[Term.Name]](n, names)
+                      val bindingsWithTypes = tpe match
+                          case None => bindingsWithNames
+                          case Some(t) =>
+                            bindingsWithNames.flatMap(b => b.add[List[Type]](t, types))
+                      bindingsWithTypes
+                  case _ => None,
+              compareTrees
+            )
 
           case _ => None
 
       // Mult Args
       // no mods (using...)
-      case Term.ArgClause(List(MultName(name)), None) =>
+      case Term.ArgClause(patArgs, None) =>
         cand match
           case Term.ArgClause(candArgs, None) =>
-            bindings.add[List[Term]](name, candArgs)
+            MultMatching.matchListWithMults(
+              patArgs,
+              candArgs,
+              bindings,
+              {
+                case MultName(_) => true
+                case _           => false
+              },
+              (multPat, taken, b) =>
+                multPat match
+                  case MultName(name) => b.add[List[Term]](name, taken)
+                  case _              => None,
+              compareTrees
+            )
           case _ => None
 
       // Mult Statements
-      case Term.Block(List(MultName(name))) =>
+      case Term.Block(patStats) =>
         cand match
           case Term.Block(candStats) =>
-            bindings.add[List[Stat]](name, candStats)
+            MultMatching.matchListWithMults(
+              patStats,
+              candStats,
+              bindings,
+              {
+                case MultName(_) => true
+                case _           => false
+              },
+              (multPat, taken, b) =>
+                multPat match
+                  case MultName(name) => b.add[List[Stat]](name, taken)
+                  case _              => None,
+              compareTrees
+            )
           case _ => None
 
       // General case

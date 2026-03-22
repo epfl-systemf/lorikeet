@@ -31,7 +31,7 @@ case class Rewriter()(using
           if substitutions.forall(isSubstitution) =>
         applySubstitutions(base, substitutions, bindings)
       // Mult vars for parameter lists
-      case Term.ParamClause(List(MultParam(name, tpe)), None) =>
+      case Term.ParamClause(List(MultParam(name, tpe)), mod) =>
         val names = bindings.getOrThrow[List[Term.Name]](name)
         val types = bindings.getOrThrow[List[Type]](tpe)
         if names.size != types.size then
@@ -40,12 +40,12 @@ case class Rewriter()(using
           )
         else
           val params =
-            names.zip(types).map((n, t) => Term.Param(Nil, n, Some(t), None))
-          Term.ParamClause(params, None)
+            names.zip(types).map((n, t) => Term.Param(mod.toList, n, Some(t), None))
+          Term.ParamClause(params, mod)
       // Mult vars for argument lists
-      case Term.ArgClause(List(MultName(name)), None) =>
+      case Term.ArgClause(List(MultName(name)), mod) =>
         val args = bindings.getOrThrow[List[Term]](name)
-        Term.ArgClause(args, None)
+        Term.ArgClause(args, mod)
       // Mult vars for statement blocks
       case Term.Block(List(MultName(name))) =>
         val stats = bindings.getOrThrow[List[Stat]](name)

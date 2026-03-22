@@ -27,8 +27,8 @@ object MultName:
   def unapply(tree: Tree): Option[String] = tree match
     case Term.Annotate(
           MetaVar(name),
-          List(MultAnnot())
-        ) =>
+          mods 
+        ) if mods.exists(MultAnnot.unapply)=>
       Some(name)
     case _ => None
 
@@ -39,15 +39,15 @@ private[metasyntax] trait MultParamBase[T]:
   def unapply(tree: Tree): Option[(T, T)] =
     tree match
       case Term.Param(
-            // @mult
-            List(MultAnnot()),
+            // @mult, but could have other annotations as well
+            mods,
             // parameter name should be metavariable or wildcard
             paramName: Term.Name,
             // parameter type should be metavariable or wildcard
             Some(decltpe: Type.Name),
             // no default value
             None
-          ) =>
+          ) if mods.exists(MultAnnot.unapply) =>
         Some(transformName(paramName), transformType(decltpe))
       case Term.Param(List(MultAnnot()), name, tpe, defv) =>
         throw new Exception(

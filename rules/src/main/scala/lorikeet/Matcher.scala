@@ -67,10 +67,10 @@ case class Matcher()(using
             )
           case _ => None
       // Mult Params
-      // no mods (using, implicit)
-      case Term.ParamClause(patParams, None) =>
+      // Mods ignored (not bound)
+      case Term.ParamClause(patParams, _) =>
         cand match
-          case Term.ParamClause(candParams, None) =>
+          case Term.ParamClause(candParams, _) =>
             MultMatching.matchListWithMults(
               patParams,
               candParams,
@@ -83,9 +83,10 @@ case class Matcher()(using
                 multPat match
                   case MultParam(name, tpe) =>
                     val names = taken.collect {
-                      // For now, require simple parameter structure for candidates
-                      // no modifiers, no default values, no ommitted types
-                      case Term.Param(Nil, n: Term.Name, Some(_), None) => n
+                      // For now, match simple parameter structure for candidates
+                      // Doesn't bind modifiers or default values
+                      // Requires no ommitted types
+                      case Term.Param(_, n: Term.Name, Some(_), _) => n
                     }
                     val types = taken.flatMap(_.decltpe)
                     if names.size != taken.size || types.size != taken.size then
@@ -106,10 +107,10 @@ case class Matcher()(using
           case _ => None
 
       // Mult Args
-      // no mods (using...)
-      case Term.ArgClause(patArgs, None) =>
+      // Mods ignored (not bound)
+      case Term.ArgClause(patArgs, _) =>
         cand match
-          case Term.ArgClause(candArgs, None) =>
+          case Term.ArgClause(candArgs, _) =>
             MultMatching.matchListWithMults(
               patArgs,
               candArgs,

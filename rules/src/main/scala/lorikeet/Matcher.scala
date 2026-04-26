@@ -13,6 +13,22 @@ case class Matcher()(using
     matchOptions: MatchOptions
 ) extends AbstractMatcher:
 
+  def compare(
+      pat: Tree,
+      cand: Tree,
+      bindings: Bindings
+  ): MatchResult =
+    // check package constraints if specified
+    matchOptions.onlyPackages match
+      case Some(pkgs) =>
+        val fullPackage = doc.tree.collect {
+          case p: Pkg => p.ref.toString()
+        }.mkString(".")
+        if pkgs.exists(pkg => fullPackage.startsWith(pkg)) then
+          compareTrees(pat, cand, bindings)
+        else None
+      case None => compareTrees(pat, cand, bindings)
+
   def compareTrees(
       pat: Tree,
       cand: Tree,
@@ -31,6 +47,18 @@ case class Matcher()(using
             // Special handling due to special meaning of backticks in patterns
             compareTrees(Pat.Var(Term.Name("?" + name)), cand, bindings)
           case _ => None
+
+      // Optional semantic handling for fully qualified names in patterns
+      case SymbolMatching.FullyQualifiedName(fqn)
+          if matchOptions.matchQualifiedNamesBySymbol  =>
+        cand match
+            case SymbolMatching.FullyQualifiedName(_) =>
+              val x = SymbolMatching.getTreeSymbolName(cand)
+              x match
+                case Some(name) if name == fqn => Some(bindings)
+                case _ => None 
+            case _ => None
+
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
       // don't match the types literally: check the symbol type instead

@@ -11,7 +11,12 @@ import pureconfig.error.ConfigReaderFailures
 case class MatchOptions(
     // Whether to match type ascriptions literally
     // or only compare the symbol type
-    matchAscriptions: Boolean
+  matchAscriptions: Boolean,
+  // Whether fully qualified names in patterns should be
+  // interpreted as semantic symbol constraints
+  matchQualifiedNamesBySymbol: Boolean,
+  // Restrict matching to only these packages (if specified)
+  onlyPackages: Option[List[String]],
 )
 
 case class CustomRule(
@@ -55,7 +60,7 @@ class MetaRule extends SemanticRule("MetaRule"):
           .flatMap { case CustomRule(n, p, r, mo, lm) =>
             val matcher = Matcher()(using doc, mo)
             val rewriter = Rewriter()(using doc, mo)
-            matcher.compareTrees(p, t, Bindings.empty).map { bindings =>
+            matcher.compare(p, t, Bindings.empty).map { bindings =>
               r match
                 case None =>
                   // Lint only

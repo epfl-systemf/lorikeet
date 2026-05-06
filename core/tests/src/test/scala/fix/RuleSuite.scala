@@ -15,9 +15,14 @@ class RuleSuite extends AbstractSemanticRuleSuite with AnyFunSuiteLike {
     else super.compareContents(obt, exp)
   }
 
-  runAllTests()
+  // runAllTests()
 
-  // testsToRun.find(_.path.testName == "scala/fix/Including.scala").foreach { test =>
-  //   runOn(test)
-  // }
+  private val selectedTests = Set(
+    // "scala/fix/ImplicitToUsing.scala",
+    "scala/fix/FullyQualifiedNames.scala"
+  )
+
+  testsToRun
+    // .filter(test => selectedTests.contains(test.path.testName))
+    .foreach(test => runOn(test))
 }

@@ -45,7 +45,7 @@ addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
 semanticdbEnabled := true
 semanticdbVersion := scalafixSemanticdb.revision
 
-scalafixDependencies += "ch.epfl.sidoniebouthors" % "lorikeet_3" % "0.1.0-SNAPSHOT"
+scalafixDependencies += "ch.epfl.systemf" % "lorikeet_3" % "0.1.0-SNAPSHOT"
 ```
 
 4. Create a `.lorikeet.conf` file in the root of your project with your custom rule configuration (see the [Guide](GUIDE.md) for syntax and examples).

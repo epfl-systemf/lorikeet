@@ -18,8 +18,7 @@ class RuleSuite extends AbstractSemanticRuleSuite with AnyFunSuiteLike {
   // runAllTests()
 
   private val selectedTests = Set(
-    // "scala/fix/ImplicitToUsing.scala",
-    "scala/fix/FullyQualifiedNames.scala"
+    // "scala-2.13/fix/MapExpansion.scala"
   )
 
   testsToRun

@@ -1,7 +1,8 @@
 lazy val V = _root_.scalafix.sbt.BuildInfo
 
-// lazy val rulesCrossVersions = Seq(V.scala213, V.scala212)
 lazy val scala3Version = "3.7.0"
+lazy val scala213Version = V.scala213
+lazy val crossVersions = Seq(scala3Version, scala213Version)
 val upickleVersion = "4.4.0"
 
 inThisBuild(
@@ -53,14 +54,14 @@ lazy val input = projectMatrix
     publish / skip := true
   )
   .defaultAxes(VirtualAxis.jvm)
-  .jvmPlatform(scalaVersions = Seq(scala3Version))
+  .jvmPlatform(scalaVersions = crossVersions)
 
 lazy val output = projectMatrix
   .settings(
     publish / skip := true
   )
   .defaultAxes(VirtualAxis.jvm)
-  .jvmPlatform(scalaVersions = Seq(scala3Version))
+  .jvmPlatform(scalaVersions = crossVersions)
 
 lazy val testsAggregate = Project("tests", file("target/testsAggregate"))
   .aggregate(tests.projectRefs: _*)
@@ -72,7 +73,7 @@ lazy val tests = projectMatrix
   .settings(
     publish / skip := true,
     // The 3 lines below are needed to ensure a "medium" lint level during tests
-    // Default is "full", as this is what is required by the script, but this 
+    // Default is "full", as this is what is required by the script, but this
     // generates lints for each rewrite
     (Test / baseDirectory) := (ThisBuild / baseDirectory).value,
     Test / fork := true,
@@ -93,12 +94,20 @@ lazy val tests = projectMatrix
       TargetAxis.resolve(input, Compile / scalaVersion).value
   )
   .defaultAxes(
-    Seq(scala3Version).map(VirtualAxis.scalaABIVersion) :+ VirtualAxis.jvm: _*
+    crossVersions.map(
+      VirtualAxis.scalaABIVersion
+    ) :+ VirtualAxis.jvm: _*
   )
   .jvmPlatform(
     scalaVersions = Seq(scala3Version),
     axisValues = Seq(TargetAxis(scala3Version)),
     settings = Seq()
+  )
+  .jvmPlatform(
+    scalaVersions = Seq(scala3Version),
+    axisValues = Seq(TargetAxis(scala213Version)),
+    settings = Seq(
+    )
   )
   .dependsOn(rules)
   .enablePlugins(ScalafixTestkitPlugin)

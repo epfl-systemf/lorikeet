@@ -1,7 +1,6 @@
 package lorikeet
 
 import scala.meta._
-import scala.meta.dialects.Scala3
 import scala.io.Source._
 import pureconfig._
 import pureconfig.error._
@@ -52,21 +51,11 @@ object Config:
         )
 
     val ruleTrees: List[CustomRule] = rules.map { rule =>
-      val matchTree = rule.pattern.parse[Stat] match
-        case Parsed.Success(t) => t
-        case Parsed.Error(_, msg, _) =>
-          throw new Exception(
-            s"Could not parse match pattern for rule '${rule.name}': $msg"
-          )
+      val matchTree = parseCode(rule.pattern, rule.name, "match pattern")
+
       val rewriteTree = rule.rewrite match
-        case Some(rp) =>
-          rp.parse[Stat] match
-            case Parsed.Success(t) => Some(t)
-            case Parsed.Error(_, msg, _) =>
-              throw new Exception(
-                s"Could not parse rewrite pattern for rule '${rule.name}': $msg"
-              )
-        case None => None
+        case Some(rp) => Some(parseCode(rp, rule.name, "rewrite pattern"))
+        case None     => None
       val matchOptions = MatchOptions(
         matchAscriptions = rule.matchAscriptions.getOrElse(false),
         matchQualifiedNamesBySymbol =
@@ -83,3 +72,17 @@ object Config:
     }
 
     ruleTrees
+
+  def parseCode(code: String, ruleName: String, codeType: String): Stat =
+    given scala.meta.Dialect = scala.meta.dialects.Scala3
+    code.parse[Stat] match
+      case Parsed.Success(t) => t
+      case Parsed.Error(_, msgScala3, _) =>
+        given scala.meta.Dialect = scala.meta.dialects.Scala213
+        code.parse[Stat] match
+          case Parsed.Success(t) => t
+          case Parsed.Error(_, msgScala2, _) =>
+            throw new Exception(
+              s"Could not parse $codeType for rule '$ruleName'. " +
+                s"Scala 3 error: $msgScala3. Scala 2 error: $msgScala2"
+            )

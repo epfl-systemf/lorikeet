@@ -6,6 +6,14 @@ Writing rules requires no knowledge of Scala's AST or the Scalafix API, and allo
 
 The included script [Check.scala](scripts/Check.scala) allows easily running a set of custom rules on a large number of student submissions, and provides detailed feedback and statistics on the results.
 
+## ️Supported Scala Versions
+
+Lorikeet is designed to  work for Scala 3 codebases and rules, but it also supports Scala 2.13 on a best-effort basis.
+
+Query patterns and rewrite templates are currently parsed as Scala 3 in priority, with Scala 2.13 as a fallback if parsing fails. The rules can be run on both Scala 3 and Scala 2.13 codebases, regardless of the version they are parsed with.
+
+Note that possible differences in AST structure may cause matching issues, and query patterns or rewrite templates that use syntax that is specific to Scala 3 will not be applicable to Scala 2.13 codebases.
+
 ## Development
 
 ### Run Tests

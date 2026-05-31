@@ -4,15 +4,13 @@ val SCALAFMT_VERSION = "3.11.1"
 val LORIKEET_VERSION = "0.1.0-SNAPSHOT"
 val LORIKEET_DEPENDENCY = s""""ch.epfl.systemf" % "lorikeet_3" % "$LORIKEET_VERSION""""
 
+import api._
+
 object LorikeetRunner {
 
-  sealed trait RunResult
-  case object Success extends RunResult
-  case object CompileError extends RunResult
-
-  def run(id: String, rulePath: String, projectPath: String): RunResult = {
+  def run(id: String, rule: String, projectPath: String): ProjectResult = {
     println(s"Running Lorikeet with ID: $id")
-    println(s"Rule: $rulePath")
+    println(s"Rule: $rule")
     println(s"Projects: $projectPath")
 
     // Assume projectPath is just a local path for now
@@ -37,6 +35,7 @@ object LorikeetRunner {
          |addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "$SBT_SCALAFIX_VERSION")
          |""".stripMargin
     )
+    println(s"Injected sbt plugins into ${injectedPluginsFile.toString}")
 
     // Inject a fallback .scalafmt.conf if the project doesn't have one
     val scalafmtConfFile = projectDir / ".scalafmt.conf"
@@ -48,29 +47,60 @@ object LorikeetRunner {
            |""".stripMargin
       )
     }
+    println(s"Ensured scalafmt config at ${scalafmtConfFile.toString}")
 
-    // Copy rule files into the project root (rule string is path)
-    val ruleFile = os.Path(rulePath)
-    os.copy(ruleFile, projectDir / ".lorikeet.conf")
+    // Create rule files into the project root (rule is the file content)
+    os.write(projectDir / ".lorikeet.conf", rule)
+    println(s"Created lorikeet config at ${projectDir / ".lorikeet.conf".toString}")
+
 
     // Compile
     if (!compile(projectDir)) then {
-      return CompileError
+      val reportText = if (os.exists(lintReport)) os.read(lintReport) else ""
+      return ProjectResult(
+        path = projectPath,
+        result = RunResult.Failure,
+        diff = None,
+        report = Some(reportText).filter(_.nonEmpty)
+      )
     }
+    println("Compilation successful")
 
     // Format and snapshot original
     formatCode(projectDir)
     os.copy(projectDir, preSnap)
+    println(s"Created pre-snapshot at ${preSnap.toString}")
 
     // Linting check
     val (lintCode, lintOut) = runScalafix(projectDir)
     val rules = ScalafixOutputProcessor.processLintReport(lintOut, lintReport, projectDir)
+    println(s"Scalafix linting completed with code $lintCode")
+    println(s"Identified ${rules.size} issues")
+    rules.foreach { rule =>
+      println(s"- ${rule.name}: ${rule.description}")
+    }
 
     // Apply fixes, reformat
     formatCode(projectDir)
     os.copy(projectDir, postSnap)
+    println(s"Created post-snapshot at ${postSnap.toString}")
 
-    Success
+    // Create a diff between pre and post snapshots
+    val diffResult = os.proc("diff", "-ru", preSnap.toString, postSnap.toString)
+      .call(cwd = tempDir, check = false, mergeErrIntoOut = true)
+    val diffText = diffResult.out.text().trim
+
+    // Read lint/report if present
+    val reportText = if (os.exists(lintReport)) os.read(lintReport) else ""
+
+    println(s"Job $id completed successfully")
+
+    ProjectResult(
+      path = projectPath,
+      result = RunResult.Success,
+      diff = Some(diffText).filter(_.nonEmpty),
+      report = Some(reportText).filter(_.nonEmpty)
+    )
   }
 
   def compile(projectDir: os.Path): Boolean = {

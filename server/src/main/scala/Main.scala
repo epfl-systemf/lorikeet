@@ -8,6 +8,7 @@ import api._
 import scala.concurrent.duration._
 import java.util.concurrent.ConcurrentHashMap
 import cats.effect.std.Queue
+import api.Endpoints.getStatus
 
 object Main extends IOApp {
 
@@ -22,23 +23,35 @@ object Main extends IOApp {
       jobOpt = Option(jobStore.get(jobId))
       _ <- jobOpt match {
         case Some(job) =>
-          IO(jobStore.put(jobId, job.copy(status = JobStatus.RUNNING))) >>
-            IO.println(
+          val projectPath = job.request.projectPaths.head
+          for {
+            _ <- IO(jobStore.put(jobId, job.copy(status = JobStatus.RUNNING)))
+            _ <- IO.println(
               s"Worker: Running refactor for ${job.request.projectPaths.size} projects..."
-            ) >>
-            IO.pure(
-              LorikeetRunner.run(
-                jobId,
-                job.request.rule,
-                job.request.projectPaths.head
-              ) match {
-                case LorikeetRunner.Success =>
-                  IO.println(s"Worker: Job $jobId completed successfully")
-                case LorikeetRunner.CompileError =>
-                  IO.println(s"Worker: Job $jobId failed due to compile error")
-              }
-            ) >>
-            IO(jobStore.put(jobId, job.copy(status = JobStatus.COMPLETED)))
+            )
+            projectResult = LorikeetRunner.run(
+              jobId,
+              job.request.rule,
+              projectPath
+            )
+            _ <- projectResult.result match {
+              case api.RunResult.Success =>
+                IO.println(
+                  s"Worker: Job $jobId completed successfully for $projectPath"
+                )
+              case api.RunResult.Failure =>
+                IO.println(s"Worker: Job $jobId failed for $projectPath")
+            }
+            updatedStatus =
+              if (projectResult.result == api.RunResult.Success) then
+                JobStatus.COMPLETED
+              else JobStatus.FAILED
+            updatedJob = job.copy(
+              status = updatedStatus,
+              results = job.results + (projectPath -> projectResult)
+            )
+            _ <- IO(jobStore.put(jobId, updatedJob))
+          } yield ()
 
         case None => IO.println(s"Worker Error: Job $jobId not found")
       }
@@ -56,14 +69,21 @@ object Main extends IOApp {
           Right(job)
         )
       }
+      getStatusEndpoint = Endpoints.getStatus.serverLogic { jobId =>
+        IO.fromOption(Option(jobStore.get(jobId)))(
+          new Exception("Job not found")
+        ).map(Right(_))
+      }
       swaggerEndpoints = SwaggerInterpreter()
         .fromServerEndpoints[IO](
-          List(refactorServerEndpoint),
+          List(refactorServerEndpoint, getStatusEndpoint),
           "Lorikeet API",
           "1.0.0"
         )
       routes = Http4sServerInterpreter[IO]()
-        .toRoutes(List(refactorServerEndpoint) ++ swaggerEndpoints)
+        .toRoutes(
+          List(refactorServerEndpoint, getStatusEndpoint) ++ swaggerEndpoints
+        )
         .orNotFound
       server = EmberServerBuilder
         .default[IO]

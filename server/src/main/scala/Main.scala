@@ -6,34 +6,40 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import api._
 import scala.concurrent.duration._
-import java.util.concurrent.ConcurrentHashMap
 import cats.effect.std.Queue
+import cats.effect.Ref // Purely functional atomic reference
 import api.Endpoints.getStatus
 
 object Main extends IOApp {
 
-  val jobStore = ConcurrentHashMap[String, Job]()
-
-  def workerLoop(queue: Queue[IO, String]): IO[Unit] = {
+  def workerLoop(
+      queue: Queue[IO, String],
+      jobStore: Ref[IO, Map[String, Job]]
+  ): IO[Unit] = {
     for {
       // wait for a job ID to process
       jobId <- queue.take
       _ <- IO.println(s"Worker: Picked up Job $jobId")
 
-      jobOpt = Option(jobStore.get(jobId))
+      store <- jobStore.get
+      jobOpt = store.get(jobId)
+
       _ <- jobOpt match {
         case Some(job) =>
           val projectPath = job.request.projectPaths.head
           for {
-            _ <- IO(jobStore.put(jobId, job.copy(status = JobStatus.RUNNING)))
+            // Update state to RUNNING
+            _ <- jobStore.update(
+              _.updated(jobId, job.copy(status = JobStatus.RUNNING))
+            )
             _ <- IO.println(
               s"Worker: Running refactor for ${job.request.projectPaths.size} projects..."
             )
-            projectResult = LorikeetRunner.run(
-              jobId,
-              job.request.rule,
-              projectPath
+
+            projectResult <- IO(
+              LorikeetRunner.run(jobId, job.request.rule, projectPath)
             )
+
             _ <- projectResult.result match {
               case api.RunResult.Success =>
                 IO.println(
@@ -42,57 +48,82 @@ object Main extends IOApp {
               case api.RunResult.Failure =>
                 IO.println(s"Worker: Job $jobId failed for $projectPath")
             }
+
             updatedStatus =
               if (projectResult.result == api.RunResult.Success) then
                 JobStatus.COMPLETED
               else JobStatus.FAILED
-            updatedJob = job.copy(
-              status = updatedStatus,
-              results = job.results + (projectPath -> projectResult)
-            )
-            _ <- IO(jobStore.put(jobId, updatedJob))
+            _ <- jobStore.update { currentStore =>
+              currentStore.get(jobId) match {
+                case Some(j) =>
+                  currentStore.updated(
+                    jobId,
+                    j.copy(
+                      status = updatedStatus,
+                      results = j.results + (projectPath -> projectResult)
+                    )
+                  )
+                case None => currentStore
+              }
+            }
           } yield ()
 
         case None => IO.println(s"Worker Error: Job $jobId not found")
       }
-      _ <- workerLoop(queue)
+      _ <- workerLoop(queue, jobStore)
     } yield ()
   }
 
   override def run(args: List[String]): IO[ExitCode] = {
     for {
       queue <- Queue.unbounded[IO, String]
+      jobStore <- Ref.of[IO, Map[String, Job]](
+        Map.empty
+      )
+
       refactorServerEndpoint = Endpoints.runRefactor.serverLogic { req =>
         val job =
           Job(request = req, status = JobStatus.PENDING, results = Map.empty)
-        IO(jobStore.put(job.id, job)) >> queue.offer(job.id) >> IO.pure(
-          Right(job)
-        )
+        for {
+          _ <- jobStore.update(_.updated(job.id, job))
+          _ <- queue.offer(job.id)
+        } yield Right(job)
       }
+
       getStatusEndpoint = Endpoints.getStatus.serverLogic { jobId =>
-        IO.fromOption(Option(jobStore.get(jobId)))(
-          new Exception("Job not found")
-        ).map(Right(_))
+        jobStore.get.map(_.get(jobId)).flatMap {
+          case Some(job) => IO.pure(Right(job))
+          case None      =>
+            IO.pure(
+              Left("Job not found")
+            )
+        }
       }
+
       swaggerEndpoints = SwaggerInterpreter()
         .fromServerEndpoints[IO](
           List(refactorServerEndpoint, getStatusEndpoint),
           "Lorikeet API",
           "1.0.0"
         )
+
       routes = Http4sServerInterpreter[IO]()
         .toRoutes(
           List(refactorServerEndpoint, getStatusEndpoint) ++ swaggerEndpoints
         )
         .orNotFound
-      server = EmberServerBuilder
+
+      serverResource = EmberServerBuilder
         .default[IO]
         .withHost(host"0.0.0.0")
         .withPort(port"8080")
         .withHttpApp(routes)
         .build
-      _ <- workerLoop(queue).start // worker in background
-      _ <- server.useForever
+
+      _ <- workerLoop(queue, jobStore).background.use { _ =>
+        serverResource.useForever
+      }
+
     } yield ExitCode.Success
   }
 }

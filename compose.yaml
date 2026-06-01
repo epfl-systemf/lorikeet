@@ -1,0 +1,38 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "8080:8080"
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./server:/workspace/server
+      # Cache Scala dependencies
+      - coursier-cache:/root/.cache/coursier
+      - sbt-cache:/root/.sbt
+      - ivy-cache:/root/.ivy2
+    working_dir: /workspace/server
+
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    command: npm run dev -- --hostname 0.0.0.0
+    depends_on:
+      - server
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: /api
+      SERVER_INTERNAL_URL: http://server:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./webapp:/app
+      - /app/node_modules
+
+volumes:
+  coursier-cache:
+  sbt-cache:
+  ivy-cache:

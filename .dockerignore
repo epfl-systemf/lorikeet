@@ -1,0 +1,12 @@
+.git
+.idea
+.vscode
+**/.bsp
+**/.metals
+**/.scala-build
+**/target
+**/node_modules
+webapp/.next
+webapp/node_modules
+**/*.log
+**/.DS_Store

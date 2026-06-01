@@ -2,21 +2,18 @@ val SBT_SCALAFIX_VERSION = "0.14.6"
 val SBT_SCALAFMT_VERSION = "2.6.1"
 val SCALAFMT_VERSION = "3.11.1"
 val LORIKEET_VERSION = "0.1.0-SNAPSHOT"
-val LORIKEET_DEPENDENCY = s""""ch.epfl.systemf" % "lorikeet_3" % "$LORIKEET_VERSION""""
+val LORIKEET_DEPENDENCY =
+  s""""ch.epfl.systemf" % "lorikeet_3" % "$LORIKEET_VERSION""""
 
 import api._
 
 object LorikeetRunner {
 
-  def run(id: String, rule: String, projectPath: String): ProjectResult = {
+  def run(id: String, rule: String, projectLink: String): ProjectResult = {
     println(s"Running Lorikeet with ID: $id")
     println(s"Rule: $rule")
-    println(s"Projects: $projectPath")
+    println(s"Projects: $projectLink")
 
-    // Assume projectPath is just a local path for now
-
-    // Clone the project to a temp directory (to avoid modifying the original)
-    val originalProjectDir = os.Path(projectPath)
     val tempDir = os.temp.dir(prefix = s"lorikeet-$id-")
 
     val projectDir = tempDir / "project"
@@ -24,10 +21,23 @@ object LorikeetRunner {
     val postSnap = tempDir / "post-snapshot"
     val lintReport = tempDir / "report.txt"
 
-    os.copy(originalProjectDir, projectDir)
+    val gitResult = os
+      .proc("git", "clone", projectLink, projectDir.toString)
+      .call(check = false)
+    if (gitResult.exitCode != 0) {
+      println(s"Failed to clone project from $projectLink")
+      return ProjectResult(
+        path = projectLink,
+        result = RunResult.Failure,
+        diff = None,
+        report = Some(gitResult.err.text()).filter(_.nonEmpty)
+      )
+    }
+    println(s"Cloned project to ${projectDir.toString}")
 
     // Inject sbt plugins for scalafmt and scalafix
-    val injectedPluginsFile = projectDir / "project" / "lorikeet-injected-plugins.sbt"
+    val injectedPluginsFile =
+      projectDir / "project" / "lorikeet-injected-plugins.sbt"
     os.write(
       injectedPluginsFile,
       s"""
@@ -51,14 +61,15 @@ object LorikeetRunner {
 
     // Create rule files into the project root (rule is the file content)
     os.write(projectDir / ".lorikeet.conf", rule)
-    println(s"Created lorikeet config at ${projectDir / ".lorikeet.conf".toString}")
-
+    println(
+      s"Created lorikeet config at ${projectDir / ".lorikeet.conf".toString}"
+    )
 
     // Compile
     if (!compile(projectDir)) then {
       val reportText = if (os.exists(lintReport)) os.read(lintReport) else ""
       return ProjectResult(
-        path = projectPath,
+        path = projectLink,
         result = RunResult.Failure,
         diff = None,
         report = Some(reportText).filter(_.nonEmpty)
@@ -73,7 +84,8 @@ object LorikeetRunner {
 
     // Linting check
     val (lintCode, lintOut) = runScalafix(projectDir)
-    val rules = ScalafixOutputProcessor.processLintReport(lintOut, lintReport, projectDir)
+    val rules =
+      ScalafixOutputProcessor.processLintReport(lintOut, lintReport, projectDir)
     println(s"Scalafix linting completed with code $lintCode")
     println(s"Identified ${rules.size} issues")
     rules.foreach { rule =>
@@ -86,7 +98,8 @@ object LorikeetRunner {
     println(s"Created post-snapshot at ${postSnap.toString}")
 
     // Create a diff between pre and post snapshots
-    val diffResult = os.proc("diff", "-ru", preSnap.toString, postSnap.toString)
+    val diffResult = os
+      .proc("diff", "-ru", preSnap.toString, postSnap.toString)
       .call(cwd = tempDir, check = false, mergeErrIntoOut = true)
     val diffText = diffResult.out.text().trim
 
@@ -96,7 +109,7 @@ object LorikeetRunner {
     println(s"Job $id completed successfully")
 
     ProjectResult(
-      path = projectPath,
+      path = projectLink,
       result = RunResult.Success,
       diff = Some(diffText).filter(_.nonEmpty),
       report = Some(reportText).filter(_.nonEmpty)
@@ -104,29 +117,33 @@ object LorikeetRunner {
   }
 
   def compile(projectDir: os.Path): Boolean = {
-    val result = os.proc(
-      "sbt",
-      "set ThisBuild / semanticdbEnabled := true",
-      "compile"
-    ).call(cwd = projectDir, check = false)
+    val result = os
+      .proc(
+        "sbt",
+        "set ThisBuild / semanticdbEnabled := true",
+        "compile"
+      )
+      .call(cwd = projectDir, check = false)
     result.exitCode == 0
   }
 
   def formatCode(projectDir: os.Path): Unit = {
     os.proc(
-    "sbt",
-    "scalafmtAll"
-  ).call(cwd = projectDir)
+      "sbt",
+      "scalafmtAll"
+    ).call(cwd = projectDir)
   }
 
   def runScalafix(projectDir: os.Path): (Int, String) = {
-    val result = os.proc(
-      "sbt",
-      "set ThisBuild / semanticdbEnabled := true",
-      s"""set ThisBuild / scalafixDependencies += $LORIKEET_DEPENDENCY""",
-      "scalafixEnable",
-      "scalafix MetaRule"
-    ).call(cwd = projectDir, check = false, mergeErrIntoOut = true)
+    val result = os
+      .proc(
+        "sbt",
+        "set ThisBuild / semanticdbEnabled := true",
+        s"""set ThisBuild / scalafixDependencies += $LORIKEET_DEPENDENCY""",
+        "scalafixEnable",
+        "scalafix MetaRule"
+      )
+      .call(cwd = projectDir, check = false, mergeErrIntoOut = true)
     (result.exitCode, result.out.text())
   }
 }

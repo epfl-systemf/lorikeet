@@ -1,0 +1,91 @@
+.container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  gap: 1em;
+  padding: 2em;
+
+  & > * {
+    flex: 1;
+    height: 100%;
+  }
+
+  .editorSection {
+    background-color: #1e1e1e;
+  }
+
+  .dashboardSection {
+    padding: 40px;
+    overflow-y: auto;
+
+    .title {
+      font-size: 1.5rem;
+      margin-bottom: 24px;
+      font-weight: 600;
+    }
+  }
+
+  .repoGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+
+    .repoCard {
+      background-color: var(--transparent-white);
+      border-radius: 0.5rem;
+      padding: 20px;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+
+      // &:hover {
+      //   transform: translateY(-4px);
+      //   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      // }
+
+      .repoCardHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .iconMain {
+        }
+        .externalLink {
+          transition: color 0.2s;
+          &:hover {
+            color: #58a6ff;
+          }
+        }
+      }
+
+      .repoCardBody {
+        p {
+          font-size: 0.85rem;
+          margin: 0;
+        }
+        h3 {
+          font-size: 1.1rem;
+          margin: 4px 0 0 0;
+          font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+    }
+  }
+}
+
+
+.addButton {
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+}

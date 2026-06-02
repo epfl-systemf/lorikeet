@@ -1,7 +1,7 @@
 /** Common extractors and utilities for metasyntax trees used across both
   * pattern and rewrite metasyntax.
   */
-package lorikeet.metasyntax.common
+package lorikeet.core.metasyntax.common
 
 import scala.meta._
 

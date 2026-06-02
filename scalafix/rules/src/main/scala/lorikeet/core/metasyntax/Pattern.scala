@@ -2,10 +2,10 @@
   * blocks, and special constructs within pattern blocks (alternative patterns,
   * binding patterns, etc.)
   */
-package lorikeet.metasyntax.pattern
+package lorikeet.core.metasyntax.pattern
 
 import scala.meta._
-import lorikeet.metasyntax.common._
+import lorikeet.core.metasyntax.common._
 
 /** Wildcard symbol `?` */
 object WildcardSymbol:

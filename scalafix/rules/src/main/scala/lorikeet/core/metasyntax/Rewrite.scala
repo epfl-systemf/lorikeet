@@ -4,10 +4,10 @@
   *   - Identifier referencing a binding: `?name`
   *   - `@mult` parameter extractors for rewrite templates
   */
-package lorikeet.metasyntax.rewrite
+package lorikeet.core.metasyntax.rewrite
 
 import scala.meta._
-import lorikeet.metasyntax.common._
+import lorikeet.core.metasyntax.common._
 
 /** Substitution syntax: `?name --> substitution` */
 object Substitution:

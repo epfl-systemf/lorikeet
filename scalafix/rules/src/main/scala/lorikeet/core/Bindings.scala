@@ -1,4 +1,4 @@
-package lorikeet
+package lorikeet.core
 
 import scalafix.v1._
 import scala.meta._

@@ -1,10 +1,10 @@
-package lorikeet
+package lorikeet.core
 
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
-import lorikeet.metasyntax.common._
-import lorikeet.metasyntax.rewrite._
+import lorikeet.core.metasyntax.common.*
+import lorikeet.core.metasyntax.rewrite.*
 
 case class Rewriter()(using
     doc: SemanticDocument,
@@ -40,7 +40,9 @@ case class Rewriter()(using
           )
         else
           val params =
-            names.zip(types).map((n, t) => Term.Param(mod.toList, n, Some(t), None))
+            names
+              .zip(types)
+              .map((n, t) => Term.Param(mod.toList, n, Some(t), None))
           Term.ParamClause(params, mod)
       // Mult vars for argument lists
       case Term.ArgClause(List(MultName(name)), mod) =>

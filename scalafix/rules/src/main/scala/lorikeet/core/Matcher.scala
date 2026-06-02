@@ -1,10 +1,10 @@
-package lorikeet
+package lorikeet.core
 
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
-import lorikeet.metasyntax.common._
-import lorikeet.metasyntax.pattern._
+import lorikeet.core.metasyntax.common.*
+import lorikeet.core.metasyntax.pattern.*
 
 type MatchResult = Option[Bindings]
 

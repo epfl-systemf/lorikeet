@@ -1,7 +1,6 @@
-package lorikeet
+package lorikeet.core
 
 import scala.meta.Tree
-import scala.tools.nsc.doc.html.HtmlTags.Li
 
 object MultMatching:
   def matchListWithMults[T <: Tree](

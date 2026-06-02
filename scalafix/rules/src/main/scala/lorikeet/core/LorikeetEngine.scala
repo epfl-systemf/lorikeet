@@ -1,4 +1,4 @@
-package lorikeet
+package lorikeet.core
 
 import scalafix.v1._
 import scala.meta._
@@ -11,12 +11,12 @@ import pureconfig.error.ConfigReaderFailures
 case class MatchOptions(
     // Whether to match type ascriptions literally
     // or only compare the symbol type
-  matchAscriptions: Boolean,
-  // Whether fully qualified names in patterns should be
-  // interpreted as semantic symbol constraints
-  matchQualifiedNamesBySymbol: Boolean,
-  // Restrict matching to only these packages (if specified)
-  onlyPackages: Option[List[String]],
+    matchAscriptions: Boolean,
+    // Whether fully qualified names in patterns should be
+    // interpreted as semantic symbol constraints
+    matchQualifiedNamesBySymbol: Boolean,
+    // Restrict matching to only these packages (if specified)
+    onlyPackages: Option[List[String]]
 )
 
 case class CustomRule(
@@ -36,7 +36,7 @@ case class LintMessage(t: Tree, r: String, m: Option[String])
       case None      => s"[$r] Rule matched."
 }
 
-class MetaRule extends SemanticRule("MetaRule"):
+object LorikeetEngine:
 
   def collectTopLevelMatches(
       tree: Tree,
@@ -49,9 +49,9 @@ class MetaRule extends SemanticRule("MetaRule"):
     }
     visit(tree)
 
-  override def fix(implicit doc: SemanticDocument): Patch =
+  def run(config: Option[String])(using doc: SemanticDocument): Patch =
     val lintLevel = Config.getLintLevel()
-    val ruleTrees = Config.parseRulesConfig()
+    val ruleTrees = Config.parseRulesConfig(config)
 
     val result = collectTopLevelMatches(
       doc.tree,

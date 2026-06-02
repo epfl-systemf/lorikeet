@@ -1,4 +1,4 @@
-package lorikeet
+package lorikeet.core
 
 import scala.meta._
 import scala.io.Source._
@@ -34,19 +34,26 @@ object Config:
         )
         LintLevel.Full
 
-  def parseRulesConfig(): List[CustomRule] =
-    val configFile = sys.env.get("RULES_CONF") match
-      case None           => ".lorikeet.conf"
-      case Some(filename) => filename
-
+  def parseRulesConfig(config: Option[String]): List[CustomRule] =
     val configResults: Either[ConfigReaderFailures, RulesConfig] =
-      ConfigSource.file(configFile).load[RulesConfig]
+      config match
+        case Some(configStr) =>
+          ConfigSource.string(configStr).load[RulesConfig]
+        case None =>
+          val configFile = sys.env.get("RULES_CONF") match
+            case None           => ".lorikeet.conf"
+            case Some(filename) => filename
+          ConfigSource.file(configFile).load[RulesConfig]
 
     val rules: List[RuleConfig] = configResults match
       case Right(r) => r.rules
       case Left(e) =>
+        val source = config match
+          case Some(_) => "config string"
+          case None =>
+            s"configuration file: ${sys.env.get("RULES_CONF").getOrElse(".lorikeet.conf")}"
         throw new Exception(
-          s"Could not read rules from configuration file: $configFile. " +
+          s"Could not read rules from $source. " +
             s"Error: ${e.prettyPrint()}"
         )
 

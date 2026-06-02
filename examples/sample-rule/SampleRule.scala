@@ -2,7 +2,7 @@
 //> using dep ch.epfl.systemf::lorikeet:0.1.0-SNAPSHOT
 //> using resourceDir ./res
 //> using publish.organization ch.epfl.systemf
-//> using publish.name sample-migration
+//> using publish.name sample-rule
 
 package fix
 

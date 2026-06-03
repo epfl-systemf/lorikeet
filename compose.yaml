@@ -19,7 +19,6 @@ services:
     build:
       context: ./webapp
       dockerfile: Dockerfile
-    command: npm run dev -- --hostname 0.0.0.0
     depends_on:
       - server
     environment:
@@ -30,7 +29,6 @@ services:
       - "3000:3000"
     volumes:
       - ./webapp:/app
-      - /app/node_modules
 
 volumes:
   coursier-cache:

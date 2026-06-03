@@ -4,6 +4,7 @@ import com.comcast.ip4s._
 import org.http4s.ember.server.EmberServerBuilder
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
+import cats.implicits._
 import api._
 import scala.concurrent.duration._
 import cats.effect.std.Queue
@@ -11,6 +12,25 @@ import cats.effect.Ref // Purely functional atomic reference
 import api.Endpoints.getStatus
 
 object Main extends IOApp {
+
+  private def updateJobResult(
+      jobStore: Ref[IO, Map[String, Job]],
+      jobId: String,
+      projectResult: ProjectResult
+  ): IO[Unit] =
+    jobStore.update { currentStore =>
+      currentStore.get(jobId) match {
+        case Some(job) =>
+          currentStore.updated(
+            jobId,
+            job.copy(
+              status = JobStatus.RUNNING,
+              results = job.results + (projectResult.path -> projectResult)
+            )
+          )
+        case None => currentStore
+      }
+    }
 
   def workerLoop(
       queue: Queue[IO, String],
@@ -26,7 +46,6 @@ object Main extends IOApp {
 
       _ <- jobOpt match {
         case Some(job) =>
-          val projectPath = job.request.projectPaths.head
           for {
             // Update state to RUNNING
             _ <- jobStore.update(
@@ -36,36 +55,43 @@ object Main extends IOApp {
               s"Worker: Running refactor for ${job.request.projectPaths.size} projects..."
             )
 
-            projectResult <- IO(
-              LorikeetRunner.run(jobId, job.request.rule, projectPath)
-            )
-
-            _ <- projectResult.result match {
-              case api.RunResult.Success =>
-                IO.println(
-                  s"Worker: Job $jobId completed successfully for $projectPath"
-                )
-              case api.RunResult.Failure =>
-                IO.println(s"Worker: Job $jobId failed for $projectPath")
+            projectResults <- job.request.projectPaths.traverse { projectPath =>
+              IO(
+                LorikeetRunner.run(jobId, job.request.rule, projectPath)
+              )
             }
 
-            updatedStatus =
-              if (projectResult.result == api.RunResult.Success) then
+            _ <- projectResults.traverse_ { projectResult =>
+              projectResult.result match {
+                case api.RunResult.Success =>
+                  IO.println(
+                    s"Worker: Job $jobId completed successfully for ${projectResult.path}"
+                  )
+                case api.RunResult.Failure =>
+                  IO.println(
+                    s"Worker: Job $jobId failed for ${projectResult.path}"
+                  )
+              }
+            }
+
+            finalStatus =
+              if (projectResults.forall(_.result == api.RunResult.Success)) then
                 JobStatus.COMPLETED
               else JobStatus.FAILED
+
+            _ <- projectResults.traverse_ { projectResult =>
+              updateJobResult(jobStore, jobId, projectResult)
+            }
             _ <- jobStore.update { currentStore =>
               currentStore.get(jobId) match {
                 case Some(j) =>
-                  currentStore.updated(
-                    jobId,
-                    j.copy(
-                      status = updatedStatus,
-                      results = j.results + (projectPath -> projectResult)
-                    )
-                  )
+                  currentStore.updated(jobId, j.copy(status = finalStatus))
                 case None => currentStore
               }
             }
+            _ <- IO.println(
+              s"Worker: Job $jobId finished with status $finalStatus"
+            )
           } yield ()
 
         case None => IO.println(s"Worker Error: Job $jobId not found")

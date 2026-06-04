@@ -63,11 +63,11 @@ object Main extends IOApp {
 
             _ <- projectResults.traverse_ { projectResult =>
               projectResult.result match {
-                case api.RunResult.Success =>
+                case api.RunResult.SUCCESS =>
                   IO.println(
                     s"Worker: Job $jobId completed successfully for ${projectResult.path}"
                   )
-                case api.RunResult.Failure =>
+                case api.RunResult.FAILURE =>
                   IO.println(
                     s"Worker: Job $jobId failed for ${projectResult.path}"
                   )
@@ -75,7 +75,7 @@ object Main extends IOApp {
             }
 
             finalStatus =
-              if (projectResults.forall(_.result == api.RunResult.Success)) then
+              if (projectResults.forall(_.result == api.RunResult.SUCCESS)) then
                 JobStatus.COMPLETED
               else JobStatus.FAILED
 

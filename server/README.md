@@ -48,7 +48,7 @@ Response body:
   "results": {
     "/path/to/project-a": {
       "path": "/path/to/project-a",
-      "result": "Success",
+      "result": "SUCCESS",
       "diff": "optional unified diff",
       "report": "optional execution report"
     }

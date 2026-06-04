@@ -28,7 +28,7 @@ object LorikeetRunner {
       println(s"Failed to clone project from $projectLink")
       return ProjectResult(
         path = projectLink,
-        result = RunResult.Failure,
+        result = RunResult.FAILURE,
         diff = None,
         report = Some(gitResult.err.text()).filter(_.nonEmpty)
       )
@@ -70,7 +70,7 @@ object LorikeetRunner {
       val reportText = if (os.exists(lintReport)) os.read(lintReport) else ""
       return ProjectResult(
         path = projectLink,
-        result = RunResult.Failure,
+        result = RunResult.FAILURE,
         diff = None,
         report = Some(reportText).filter(_.nonEmpty)
       )
@@ -110,7 +110,7 @@ object LorikeetRunner {
 
     ProjectResult(
       path = projectLink,
-      result = RunResult.Success,
+      result = RunResult.SUCCESS,
       diff = Some(diffText).filter(_.nonEmpty),
       report = Some(reportText).filter(_.nonEmpty)
     )

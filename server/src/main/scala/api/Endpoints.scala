@@ -10,9 +10,18 @@ case class RunRequest(
     projectPaths: List[String]
 ) derives Codec
 
-enum RunResult derives Encoder, Decoder:
-  case Success
-  case Failure
+enum RunResult:
+  case SUCCESS
+  case FAILURE
+
+given Codec[RunResult] = Codec.from(
+  Decoder.decodeString.emap {
+    case "SUCCESS" => Right(RunResult.SUCCESS)
+    case "FAILURE" => Right(RunResult.FAILURE)
+    case other     => Left(s"Unknown run result: $other")
+  },
+  Encoder.encodeString.contramap(_.toString)
+)
 
 case class ProjectResult(
     path: String,
@@ -21,8 +30,19 @@ case class ProjectResult(
     report: Option[String] = None
 ) derives Codec
 
-enum JobStatus derives Encoder, Decoder:
+enum JobStatus:
   case PENDING, RUNNING, COMPLETED, FAILED
+
+given Codec[JobStatus] = Codec.from(
+  Decoder.decodeString.emap {
+    case "PENDING"   => Right(JobStatus.PENDING)
+    case "RUNNING"   => Right(JobStatus.RUNNING)
+    case "COMPLETED" => Right(JobStatus.COMPLETED)
+    case "FAILED"    => Right(JobStatus.FAILED)
+    case other       => Left(s"Unknown job status: $other")
+  },
+  Encoder.encodeString.contramap(_.toString)
+)
 
 case class Job(
     id: String = UUID.randomUUID().toString,

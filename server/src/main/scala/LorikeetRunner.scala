@@ -17,8 +17,6 @@ object LorikeetRunner {
     val tempDir = os.temp.dir(prefix = s"lorikeet-$id-")
 
     val projectDir = tempDir / "project"
-    val preSnap = tempDir / "pre-snapshot"
-    val postSnap = tempDir / "post-snapshot"
     val lintReport = tempDir / "report.txt"
 
     val gitResult = os
@@ -79,8 +77,9 @@ object LorikeetRunner {
 
     // Format and snapshot original
     formatCode(projectDir)
-    os.copy(projectDir, preSnap)
-    println(s"Created pre-snapshot at ${preSnap.toString}")
+
+    os.proc("git", "add", ".").call(cwd = projectDir)
+    println("Staged baseline")
 
     // Linting check
     val (lintCode, lintOut) = runScalafix(projectDir)
@@ -94,13 +93,18 @@ object LorikeetRunner {
 
     // Apply fixes, reformat
     formatCode(projectDir)
-    os.copy(projectDir, postSnap)
-    println(s"Created post-snapshot at ${postSnap.toString}")
 
-    // Create a diff between pre and post snapshots
+    // Create diff
     val diffResult = os
-      .proc("diff", "-ru", preSnap.toString, postSnap.toString)
-      .call(cwd = tempDir, check = false, mergeErrIntoOut = true)
+      .proc(
+        "git", "diff", "-U1",
+        // Exclude injected files
+        "--",
+        ":(exclude).scalafmt.conf",
+        ":(exclude).lorikeet.conf"
+      )
+      .call(cwd = projectDir, check = false)
+    
     val diffText = diffResult.out.text().trim
 
     // Read lint/report if present

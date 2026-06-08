@@ -1,35 +1,29 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
+import Modal from "@/components/Modal";
+import RepoCard, { RepoItem } from "@/components/RepoCard";
+import ResultDialog from "@/components/ResultDialog";
 import {
-  IconBrandGithub,
-  IconExternalLink,
-  IconPlus,
-} from "@tabler/icons-react";
+  Job,
+  pollJobUntilComplete,
+  ProjectResult,
+  submitRefactorJob,
+} from "@/lib/api";
+import { parseGithubUrl } from "@/lib/utils";
+import Editor from "@monaco-editor/react";
+import { IconPlayerPlay, IconPlus } from "@tabler/icons-react";
 import { useState } from "react";
-
-interface RepoItem {
-  url: string;
-  name: string;
-  owner: string;
-}
-
-const parseGithubUrl = (url: string) => {
-  try {
-    const trimmed = url.trim();
-    const match = trimmed.match(/github\.com\/([^/]+)\/([^/]+)/);
-    if (match && match[1] && match[2]) {
-      return { owner: match[1], name: match[2].replace(/\.git$/, "") };
-    }
-  } catch (e) {
-    console.error("Invalid URL");
-  }
-  return null;
-};
 
 export default function Home() {
   const [repos, setRepos] = useState<RepoItem[]>([]);
   const [editorValue, setEditorValue] = useState<string>("rules = []\n");
+
+  // Dialog state
+  const [activeSingleResult, setActiveSingleResult] =
+    useState<ProjectResult | null>(null);
+  const [activeGlobalJob, setActiveGlobalJob] = useState<Job | null>(null);
+  const [isGlobalRunning, setIsGlobalRunning] = useState(false);
+  const [showGlobalSummary, setShowGlobalSummary] = useState(false);
 
   const handleAddRepo = () => {
     const url = prompt(
@@ -54,6 +48,31 @@ export default function Home() {
     setRepos([...repos, newRepo]);
   };
 
+  const handleRunAll = async () => {
+    if (repos.length === 0) return alert("Please add at least one repository.");
+    if (!editorValue || editorValue.trim() === "")
+      return alert("No rule present in the editor.");
+
+    try {
+      setIsGlobalRunning(true);
+      const job = await submitRefactorJob({
+        rule: editorValue,
+        projectPaths: repos.map((r) => r.url),
+      });
+
+      setActiveGlobalJob(job);
+
+      const completedJob = await pollJobUntilComplete(job.id);
+      setActiveGlobalJob(completedJob);
+      setShowGlobalSummary(true);
+    } catch (e) {
+      console.error(e);
+      alert("Global run failed.");
+    } finally {
+      setIsGlobalRunning(false);
+    }
+  };
+
   return (
     <div className="container">
       <div className="editorSection">
@@ -68,27 +87,49 @@ export default function Home() {
         />
       </div>
       <div className="dashboardSection">
-        <h2 className="title">Repositories</h2>
+        <div className="dashboardHeader">
+          <h2 className="title">Repositories</h2>
+          <div className="actionButtons">
+            {repos.length > 0 && (
+              <button
+                onClick={handleRunAll}
+                disabled={isGlobalRunning}
+                className="runAllButton"
+              >
+                <IconPlayerPlay size={18} />
+                <span>
+                  {isGlobalRunning ? "Running on All..." : "Run All Repos"}
+                </span>
+              </button>
+            )}
+            {activeGlobalJob && (
+              <button
+                onClick={() => setShowGlobalSummary(true)}
+                className="summaryButton"
+              >
+                View Last Run Summary
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="repoGrid">
           {repos.map((repo) => (
-            <div key={repo.url} className="repoCard">
-              <div className="repoCardHeader">
-                <IconBrandGithub stroke={2} className="iconMain" />
-                <a
-                  href={repo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="externalLink"
-                >
-                  <IconExternalLink stroke={2} />
-                </a>
-              </div>
-
-              <div className="repoCardBody">
-                <p>{repo.owner}</p>
-                <h3>{repo.name}</h3>
-              </div>
-            </div>
+            <RepoCard
+              key={repo.url}
+              repo={repo}
+              ruleText={editorValue}
+              globalJob={activeGlobalJob}
+              onCardClick={(result) => {
+                if (!result) {
+                  alert(
+                    "This repository hasn't been evaluated yet. Click its play button to evaluate.",
+                  );
+                  return;
+                }
+                setActiveSingleResult(result);
+              }}
+            />
           ))}
           <button onClick={handleAddRepo} className="addButton">
             <IconPlus stroke={2} />
@@ -96,6 +137,40 @@ export default function Home() {
           </button>
         </div>
       </div>
+
+      {/* Individual Repo Result Modal */}
+      <Modal
+        isOpen={!!activeSingleResult}
+        onClose={() => setActiveSingleResult(null)}
+        title="Repository Results"
+      >
+        {activeSingleResult && (
+          <ResultDialog projectResult={activeSingleResult} />
+        )}
+      </Modal>
+
+      {/* Overall Summary Result Modal */}
+      <Modal
+        isOpen={showGlobalSummary && !!activeGlobalJob}
+        onClose={() => setShowGlobalSummary(false)}
+        title="Overall Job Summary"
+      >
+        {activeGlobalJob && (
+          <>
+            <p>
+              <strong>Job Status:</strong> {activeGlobalJob.status}
+            </p>
+            <hr />
+            <div>
+              {Object.values(activeGlobalJob.results).map((res) => (
+                <div key={res.path}>
+                  <ResultDialog projectResult={res} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

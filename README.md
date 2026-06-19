@@ -8,11 +8,11 @@ The included script [Check.scala](scripts/Check.scala) allows easily running a s
 
 ## ️Supported Scala Versions
 
-Lorikeet is designed to  work for Scala 3 codebases and rules, but it also supports Scala 2.13 on a best-effort basis.
+Lorikeet is designed to  work for Scala 3 codebases and rules, but it also supports Scala 2 on a best-effort basis.
 
-Query patterns and rewrite templates are currently parsed as Scala 3 in priority, with Scala 2.13 as a fallback if parsing fails. The rules can be run on both Scala 3 and Scala 2.13 codebases, regardless of the version they are parsed with.
+Query patterns and rewrite templates are currently parsed as Scala 3 in priority, with Scala 2.13 as a fallback if parsing fails. The rules can be run on both Scala 3 and Scala 2 codebases, regardless of the version they are parsed with.
 
-Note that possible differences in AST structure may cause matching issues, and query patterns or rewrite templates that use syntax that is specific to Scala 3 will not be applicable to Scala 2.13 codebases.
+Note that possible differences in AST structure may cause matching issues, and query patterns or rewrite templates that use syntax that is specific to Scala 3 will not be applicable to Scala 2 codebases.
 
 ## Development
 

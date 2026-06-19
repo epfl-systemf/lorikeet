@@ -16,17 +16,20 @@ Note that possible differences in AST structure may cause matching issues, and q
 
 ## Development
 
-### Run Tests
+This repo is structured as follows:
 
-```bash
-sbt "tests / test"
+```text
+.
+├── examples/                 # Example usage
+├── extensions/               # VSCode highlighting extension for `.lorikeet.conf` files
+├── grading/                  # Student grading script & rules
+├── scalafix/                 # Core logic of Lorikeet
+├── scripts/                  # Student grading script
+├── server/                   # Webapp backend
+└── webapp/                   # Webapp frontend
 ```
 
-### Publish Locally
-
-```bash
-sbt "lorikeet / publishLocal"
-```
+See the README in the respective subfolders for more information.
 
 ## Usage
 
@@ -147,3 +150,46 @@ Grading complete.
 ```
 
 See the configuration options at the top of the script.
+
+## Running the Lorikeet Webapp
+
+The Lorikeet webapp has a custom UI to easily run rules on GitHub repositories. It is made of a Scala backend and a Next.js frontend, which can easily be run together with the Docker Compose setup.
+
+For now there is no premade production setup for hosting the Lorikeet webapp.
+
+### Prerequisites
+
+Docker and Docker Compose installed
+
+### Quick Start
+
+From the repo root, run:
+
+```bash
+docker compose up --build
+```
+
+This will:
+
+1. Build the server image with sbt with the Lorikeet rule published locally in it
+2. Build the webapp image
+3. Start both services: server on `http://localhost:8080` and webapp on `http://localhost:3000`
+
+The webapp is accessible at `http://localhost:3000` and will automatically proxy requests to `/api/*` to the server.
+
+Stop the containers with:
+
+```bash
+docker compose down
+```
+
+### Hot Reload
+
+Both containers support live reload:
+
+- **Webapp**: Edit TypeScript/React files in `webapp/` and changes appear immediately in the browser
+- **Server**: Edit Scala files in `server/` and sbt will recompile on save
+
+### Webapp Development
+
+Check the README in the `server` and `webapp` folders to see more about the server API endpoints or other useful information.

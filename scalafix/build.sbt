@@ -2,7 +2,8 @@ lazy val V = _root_.scalafix.sbt.BuildInfo
 
 lazy val scala3Version = "3.7.0"
 lazy val scala213Version = V.scala213
-lazy val crossVersions = Seq(scala3Version, scala213Version)
+lazy val scala212Version = V.scala212
+lazy val crossVersions = Seq(scala3Version, scala213Version, scala212Version)
 val upickleVersion = "4.4.0"
 
 inThisBuild(
@@ -49,16 +50,27 @@ lazy val rules = projectMatrix
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = Seq(scala3Version))
 
+// Dependencies for test input / output
+val versionSpecificDependencies = libraryDependencies ++= {
+  CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, 12)) =>
+      Seq("co.fs2" %% "fs2-core" % "0.10.7") // FS2Brackets
+    case _ => Nil
+  }
+}
+
 lazy val input = projectMatrix
   .settings(
-    publish / skip := true
+    publish / skip := true,
+    versionSpecificDependencies
   )
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = crossVersions)
 
 lazy val output = projectMatrix
   .settings(
-    publish / skip := true
+    publish / skip := true,
+    versionSpecificDependencies
   )
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = crossVersions)
@@ -106,8 +118,12 @@ lazy val tests = projectMatrix
   .jvmPlatform(
     scalaVersions = Seq(scala3Version),
     axisValues = Seq(TargetAxis(scala213Version)),
-    settings = Seq(
-    )
+    settings = Seq()
+  )
+  .jvmPlatform(
+    scalaVersions = Seq(scala3Version),
+    axisValues = Seq(TargetAxis(scala212Version)),
+    settings = Seq()
   )
   .dependsOn(rules)
   .enablePlugins(ScalafixTestkitPlugin)

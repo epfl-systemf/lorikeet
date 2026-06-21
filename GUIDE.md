@@ -24,7 +24,7 @@ rules = [
 - `rewrite` (optional): The template to use for rewriting matched code. See Rewriter section below for syntax. If omitted, Scalafix will only report matches without rewriting them.
 - `description` (optional): A description of the rule, used for feedback messages.
 - `match-ascriptions` (optional, default: false): If true, type ascriptions in the pattern are matched syntactically rather than semantically. See Matcher section below for details.
-- `match-qualified-names-by-symbol` (optional, default: false): If true, fully qualified names in the pattern are interpreted as semantic symbol constraints rather than strict syntactic paths.
+- `match-fqn` (optional, default: false): If true, fully qualified names in the pattern are interpreted as semantic symbol constraints rather than strict syntactic paths.
 - `only-packages` (optional): If specified, restricts matching to code within the listed packages.
 
 The tool will search for instances of code that match the `pattern`, and replace them with the `rewrite` template. Both the `pattern` and `rewrite` fields are written in Scala 3 syntax, with additional constructs for matching and rewriting.

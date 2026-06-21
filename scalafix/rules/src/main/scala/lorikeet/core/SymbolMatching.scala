@@ -32,21 +32,32 @@ object SymbolMatching:
 
     nameSegments.map(segments => segments.mkString(".").stripPrefix("_root_."))
 
-  def getTreeSymbolName(cand: Tree)(using
+  /* Match a tree node with a fully qualified name */
+  def matchTreeWithFQN(cand: Tree, fqn: String)(using
       doc: SemanticDocument
-  ) =
+  ): Boolean =
+    SymbolMatcher.normalized(fqn).matches(cand)
+      || extractAliasFQN(cand) == Some(fqn)
+
+  /* Attempt to check if candidate symbol may be
+   * an alias for a different symbol
+   *
+   * For example anything in scala/package or scala/Predef (List, String...)
+   */
+  def extractAliasFQN(cand: Tree)(using
+      doc: SemanticDocument
+  ): Option[String] =
     doc.info(cand.symbol) match
       case Some(i: SymbolInformation) =>
         i.signature match
-          case MethodSignature(typeParameters, parameterLists, returnType) =>
+          case MethodSignature(typeParameters, parameterLists, returnType)
+              if typeParameters.isEmpty && parameterLists.isEmpty =>
             getTypeSymbol(returnType)
-          case TypeSignature(typeParameters, lowerBound, upperBound) =>
+          case TypeSignature(typeParameters, lowerBound, upperBound)
+              if lowerBound == upperBound =>
             getTypeSymbol(lowerBound)
-          case _ =>
-            cand.symbol.value match
-              case s if s.contains("package") => None
-              case s => Some(normalizeSymbolQualifiedName(s))
-      case None => None
+          case _ => None
+      case _ => None
 
   def getTypeSymbol(tpe: SemanticType)(using
       doc: SemanticDocument

@@ -14,7 +14,7 @@ case class MatchOptions(
     matchAscriptions: Boolean,
     // Whether fully qualified names in patterns should be
     // interpreted as semantic symbol constraints
-    matchQualifiedNamesBySymbol: Boolean,
+    matchFqn: Boolean,
     // Restrict matching to only these packages (if specified)
     onlyPackages: Option[List[String]]
 )

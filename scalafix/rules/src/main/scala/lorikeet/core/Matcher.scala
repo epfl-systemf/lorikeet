@@ -21,9 +21,11 @@ case class Matcher()(using
     // check package constraints if specified
     matchOptions.onlyPackages match
       case Some(pkgs) =>
-        val fullPackage = doc.tree.collect {
-          case p: Pkg => p.ref.toString()
-        }.mkString(".")
+        val fullPackage = doc.tree
+          .collect { case p: Pkg =>
+            p.ref.toString()
+          }
+          .mkString(".")
         if pkgs.exists(pkg => fullPackage.startsWith(pkg)) then
           compareTrees(pat, cand, bindings)
         else None
@@ -49,15 +51,12 @@ case class Matcher()(using
           case _ => None
 
       // Optional semantic handling for fully qualified names in patterns
-      case SymbolMatching.FullyQualifiedName(fqn)
-          if matchOptions.matchQualifiedNamesBySymbol  =>
+      case SymbolMatching.FullyQualifiedName(fqn) if matchOptions.matchFqn =>
         cand match
-            case SymbolMatching.FullyQualifiedName(_) =>
-              val x = SymbolMatching.getTreeSymbolName(cand)
-              x match
-                case Some(name) if name == fqn => Some(bindings)
-                case _ => None 
-            case _ => None
+          case SymbolMatching.FullyQualifiedName(_)
+              if SymbolMatching.matchTreeWithFQN(cand, fqn) =>
+            Some(bindings)
+          case _ => None
 
       // Special handling for type ascriptions
       // For options with matchAscriptions = false:
@@ -105,9 +104,9 @@ case class Matcher()(using
               bindings,
               {
                 case MultParam(_, _) => true
-                case _                => false
+                case _               => false
               },
-              (multPat, taken, b) =>
+              (multPat, taken, b) => {
                 multPat match
                   case MultParam(name, tpe) =>
                     val names = taken.collect {
@@ -121,14 +120,17 @@ case class Matcher()(using
                       None
                     else
                       val bindingsWithNames = name match
-                          case None    => Some(bindings)
-                          case Some(n) => bindings.add[List[Term.Name]](n, names)
+                        case None    => Some(bindings)
+                        case Some(n) => bindings.add[List[Term.Name]](n, names)
                       val bindingsWithTypes = tpe match
-                          case None => bindingsWithNames
-                          case Some(t) =>
-                            bindingsWithNames.flatMap(b => b.add[List[Type]](t, types))
+                        case None => bindingsWithNames
+                        case Some(t) =>
+                          bindingsWithNames.flatMap(b =>
+                            b.add[List[Type]](t, types)
+                          )
                       bindingsWithTypes
-                  case _ => None,
+                  case _ => None
+              },
               compareTrees
             )
 
@@ -147,10 +149,11 @@ case class Matcher()(using
                 case MultName(_) => true
                 case _           => false
               },
-              (multPat, taken, b) =>
+              (multPat, taken, b) => {
                 multPat match
                   case MultName(name) => b.add[List[Term]](name, taken)
-                  case _              => None,
+                  case _              => None
+              },
               compareTrees
             )
           case _ => None
@@ -167,10 +170,11 @@ case class Matcher()(using
                 case MultName(_) => true
                 case _           => false
               },
-              (multPat, taken, b) =>
+              (multPat, taken, b) => {
                 multPat match
                   case MultName(name) => b.add[List[Stat]](name, taken)
-                  case _              => None,
+                  case _              => None
+              },
               compareTrees
             )
           case _ => None

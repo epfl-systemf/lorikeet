@@ -8,7 +8,7 @@ import pureconfig.error._
 case class RuleConfig(
     name: String,
     matchAscriptions: Option[Boolean],
-    matchQualifiedNamesBySymbol: Option[Boolean],
+    matchFqn: Option[Boolean],
     onlyPackages: Option[List[String]],
     description: Option[String],
     pattern: String,
@@ -65,8 +65,7 @@ object Config:
         case None     => None
       val matchOptions = MatchOptions(
         matchAscriptions = rule.matchAscriptions.getOrElse(false),
-        matchQualifiedNamesBySymbol =
-          rule.matchQualifiedNamesBySymbol.getOrElse(false),
+        matchFqn = rule.matchFqn.getOrElse(false),
         onlyPackages = rule.onlyPackages
       )
       CustomRule(

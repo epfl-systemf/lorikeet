@@ -8,7 +8,8 @@ object SymbolMatching:
   object FullyQualifiedName:
     def unapply(tree: Tree): Option[String] =
       val extracted = extractPatternQualifiedName(tree)
-      extracted
+      // FQN cannot include metavariables
+      extracted.filter(str => !str.contains('?'))
 
   def extractPatternQualifiedName(tree: Tree): Option[String] =
     def termRefSegments(ref: Term.Ref): Option[List[String]] =
@@ -37,6 +38,7 @@ object SymbolMatching:
       doc: SemanticDocument
   ): Boolean =
     SymbolMatcher.normalized(fqn).matches(cand)
+      || extractPatternQualifiedName(cand) == Some(fqn)
       || extractAliasFQN(cand) == Some(fqn)
 
   /* Attempt to check if candidate symbol may be

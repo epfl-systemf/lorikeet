@@ -50,8 +50,8 @@ lazy val rules = projectMatrix
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = Seq(scala3Version))
 
-// Dependencies for test input / output
-val versionSpecificDependencies = libraryDependencies ++= {
+// Dependencies for test input
+val inputDeps = libraryDependencies ++= {
   CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((2, 12)) =>
       Seq("co.fs2" %% "fs2-core" % "0.10.7") // FS2Brackets
@@ -59,10 +59,19 @@ val versionSpecificDependencies = libraryDependencies ++= {
   }
 }
 
+// Dependencies for test output
+val outputDeps = libraryDependencies ++= {
+  CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, 12)) =>
+      Seq("co.fs2" %% "fs2-core" % "1.0.0") // FS2Brackets
+    case _ => Nil
+  }
+}
+
 lazy val input = projectMatrix
   .settings(
     publish / skip := true,
-    versionSpecificDependencies
+    inputDeps
   )
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = crossVersions)
@@ -70,7 +79,7 @@ lazy val input = projectMatrix
 lazy val output = projectMatrix
   .settings(
     publish / skip := true,
-    versionSpecificDependencies
+    outputDeps
   )
   .defaultAxes(VirtualAxis.jvm)
   .jvmPlatform(scalaVersions = crossVersions)

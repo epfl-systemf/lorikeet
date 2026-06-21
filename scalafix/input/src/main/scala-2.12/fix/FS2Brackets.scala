@@ -1,13 +1,26 @@
 /*
 rule = MetaRule
  */
+package fix
+package fs2bracket
 
 import fs2._
 import cats.effect.IO
 
 object FS2Brackets {
 
-  val simple: Stream[IO, String] =
+  def acquire = IO(99)
+  def use(r: Int) = Stream.emit(r)
+  def release(r: Int) = IO()
+
+  val withNamedFunctions: Stream[IO, Int] =
+    Stream.bracket(acquire)(use, release)
+
+  val withLambdas: Stream[IO, Int] =
+    Stream
+      .bracket(IO(99))(r => Stream.emit(r), r => IO())
+
+  val withStrings: Stream[IO, String] =
     Stream.bracket(IO(println("acquire")))(
       _ => Stream.emit("hello"),
       _ => IO(println("release"))
@@ -19,11 +32,9 @@ object FS2Brackets {
       r => IO(println(s"releasing $r"))
     )
 
-  def acquire: IO[Int] = IO(println("open")).map(_ => 99)
-  def use(r: Int): Stream[IO, Int] = Stream.emit(r)
-  def release(r: Int): IO[Unit] = IO(println(s"close $r"))
-
-  val withNamedFunctions: Stream[IO, Int] =
-    Stream.bracket(acquire)(use, release)
+  val withImport: Stream[IO, Int] = {
+    import fs2.Stream._
+    bracket(acquire)(use, release)
+  }
 
 }

@@ -58,14 +58,20 @@ object LorikeetRunner {
     println(s"Ensured scalafmt config at ${scalafmtConfFile.toString}")
 
     // Create rule files into the project root (rule is the file content)
-    os.write(projectDir / ".lorikeet.conf", rule)
+    os.write.over(projectDir / ".lorikeet.conf", rule)
     println(
       s"Created lorikeet config at ${projectDir / ".lorikeet.conf".toString}"
     )
 
     // Compile
-    if (!compile(projectDir)) then {
-      val reportText = if (os.exists(lintReport)) os.read(lintReport) else ""
+    val compileResult = compile(projectDir)
+    if (!compileResult.success) then {
+      println("Compilation failed")
+      val reportText =
+        if (compileResult.log.nonEmpty) then
+          s"Compilation Failed:\n\n${compileResult.log}"
+        else "Compilation failed with an unknown error."
+
       return ProjectResult(
         path = projectLink,
         result = RunResult.FAILURE,
@@ -97,14 +103,16 @@ object LorikeetRunner {
     // Create diff
     val diffResult = os
       .proc(
-        "git", "diff", "-U1",
+        "git",
+        "diff",
+        "-U1",
         // Exclude injected files
         "--",
         ":(exclude).scalafmt.conf",
         ":(exclude).lorikeet.conf"
       )
       .call(cwd = projectDir, check = false)
-    
+
     val diffText = diffResult.out.text().trim
 
     // Read lint/report if present
@@ -120,15 +128,17 @@ object LorikeetRunner {
     )
   }
 
-  def compile(projectDir: os.Path): Boolean = {
+  case class CompileResult(success: Boolean, log: String)
+
+  def compile(projectDir: os.Path): CompileResult = {
     val result = os
       .proc(
         "sbt",
         "set ThisBuild / semanticdbEnabled := true",
         "compile"
       )
-      .call(cwd = projectDir, check = false)
-    result.exitCode == 0
+      .call(cwd = projectDir, check = false, mergeErrIntoOut = true)
+    CompileResult(result.exitCode == 0, result.out.text())
   }
 
   def formatCode(projectDir: os.Path): Unit = {

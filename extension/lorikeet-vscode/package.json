@@ -44,78 +44,177 @@
     ],
     "configurationDefaults": {
       "editor.tokenColorCustomizations": {
-        "textMateRules": [
-          {
-            "scope": "keyword.other.key.hocon",
-            "settings": {
-              "foreground": "#88acc9"
+        "[*Dark*]": {
+          "textMateRules": [
+            {
+              "scope": "keyword.other.key.hocon",
+              "settings": {
+                "foreground": "#88acc9"
+              }
+            },
+            {
+              "scope": [
+                "string.quoted.double.hocon",
+                "string.quoted.triple.hocon"
+              ],
+              "settings": {
+                "foreground": "#d1a290"
+              }
+            },
+            {
+              "scope": [
+                "constant.language.hocon"
+              ],
+              "settings": {
+                "foreground": "#90d19d"
+              }
+            },
+            {
+              "scope": "variable.other.metavariable.lorikeet",
+              "settings": {
+                "foreground": "#e9be8c",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.operator.substitute.lorikeet",
+              "settings": {
+                "foreground": "#a782d4",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": [
+                "punctuation.definition.block.tag.lorikeet"
+              ],
+              "settings": {
+                "foreground": "#e9be8c",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.operator.bind.lorikeet",
+              "settings": {
+                "foreground": "#a782d4",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.control.lorikeet",
+              "settings": {
+                "foreground": "#a782d4"
+              }
+            },
+            {
+              "scope": "constant.numeric.uses.lorikeet",
+              "settings": {
+                "foreground": "#a3e57f"
+              }
+            },
+            {
+              "scope": "support.function.uses.lorikeet",
+              "settings": {
+                "foreground": "#a3e57f"
+              }
+            },
+            {
+              "scope": "variable.language.wildcard.lorikeet",
+              "settings": {
+                "foreground": "#a782d4",
+                "fontStyle": "bold"
+              }
             }
-          },
-          {
-            "scope": [
-              "string.quoted.double.hocon",
-              "string.quoted.triple.hocon"
-            ],
-            "settings": {
-              "foreground": "#d1a290"
+          ]
+        },
+        "[*Light*]": {
+          "textMateRules": [
+            {
+              "scope": "keyword.other.key.hocon",
+              "settings": {
+                "foreground": "#40739d"
+              }
+            },
+            {
+              "scope": [
+                "string.quoted.double.hocon",
+                "string.quoted.triple.hocon"
+              ],
+              "settings": {
+                "foreground": "#be5e3b"
+              }
+            },
+            {
+              "scope": [
+                "constant.language.hocon"
+              ],
+              "settings": {
+                "foreground": "#569462"
+              }
+            },
+            {
+              "scope": "variable.other.metavariable.lorikeet",
+              "settings": {
+                "foreground": "#da9648",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.operator.substitute.lorikeet",
+              "settings": {
+                "foreground": "#7730ce",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.operator.mult.lorikeet",
+              "settings": {
+                "foreground": "#c4652f",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": [
+                "punctuation.definition.block.tag.lorikeet"
+              ],
+              "settings": {
+                "foreground": "#da9648",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.operator.bind.lorikeet",
+              "settings": {
+                "foreground": "#7730ce",
+                "fontStyle": "bold"
+              }
+            },
+            {
+              "scope": "keyword.control.lorikeet",
+              "settings": {
+                "foreground": "#7730ce"
+              }
+            },
+            {
+              "scope": "constant.numeric.uses.lorikeet",
+              "settings": {
+                "foreground": "#7ad34a"
+              }
+            },
+            {
+              "scope": "support.function.uses.lorikeet",
+              "settings": {
+                "foreground": "#7ad34a"
+              }
+            },
+            {
+              "scope": "variable.language.wildcard.lorikeet",
+              "settings": {
+                "foreground": "#7730ce",
+                "fontStyle": "bold"
+              }
             }
-          },
-          {
-            "scope": "variable.other.metavariable.lorikeet",
-            "settings": {
-              "foreground": "#e9be8c",
-              "fontStyle": "bold"
-            }
-          },
-          {
-            "scope": "keyword.operator.substitute.lorikeet",
-            "settings": {
-              "foreground": "#a782d4",
-              "fontStyle": "bold"
-            }
-          },
-          {
-            "scope": [
-              "punctuation.definition.block.tag.lorikeet"
-            ],
-            "settings": {
-              "foreground": "#e9be8c",
-              "fontStyle": "bold"
-            }
-          },
-          {
-            "scope": "keyword.operator.bind.lorikeet",
-            "settings": {
-              "foreground": "#a782d4",
-              "fontStyle": "bold"
-            }
-          },
-          {
-            "scope": "keyword.control.lorikeet",
-            "settings": {
-              "foreground": "#a782d4"
-            }
-          },
-          {
-            "scope": "constant.numeric.uses.lorikeet",
-            "settings": {
-              "foreground": "#a3e57f"
-            }
-          },
-          {
-            "scope": "support.function.uses.lorikeet",
-            "settings": {
-              "foreground": "#a3e57f"
-            }
-          },
-          {
-            "scope": "variable.language.wildcard.lorikeet",
-            "settings": {
-              "foreground": "#a782d4",
-              "fontStyle": "bold"
-            }
-          }
-        ]
+          ]
+        }
       }
     }
   }

@@ -5,12 +5,17 @@
     {
       "comment": "Metavariables",
       "name": "variable.other.metavariable.lorikeet",
-      "match": "`\\?[a-zA-Z0-9]+`|\\?[a-zA-Z0-9]+"
+      "match": "`\\?[a-zA-Z0-9]*`|\\?[a-zA-Z0-9]+"
     },
     {
       "comment": "Substitute Arrow",
       "name": "keyword.operator.substitute.lorikeet",
       "match": "-->"
+    },
+    {
+      "comment": "Mult Tag",
+      "name": "keyword.operator.mult.lorikeet",
+      "match": "@mult"
     },
     {
       "comment": "Pattern Blocks",

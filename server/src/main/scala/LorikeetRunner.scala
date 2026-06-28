@@ -5,6 +5,8 @@ val LORIKEET_VERSION = "0.1.0-SNAPSHOT"
 val LORIKEET_DEPENDENCY =
   s""""ch.epfl.systemf" % "lorikeet_3" % "$LORIKEET_VERSION""""
 
+val BASE_TIMEOUT = 3000
+
 import api._
 
 object LorikeetRunner {
@@ -19,16 +21,24 @@ object LorikeetRunner {
     val projectDir = tempDir / "project"
     val lintReport = tempDir / "report.txt"
 
+    val gitEnv = sys.env + ("GIT_TERMINAL_PROMPT" -> "0")
     val gitResult = os
       .proc("git", "clone", projectLink, projectDir.toString)
-      .call(check = false)
+      .call(
+        check = false,
+        env = gitEnv,
+        timeout = BASE_TIMEOUT,
+        mergeErrIntoOut = true
+      )
     if (gitResult.exitCode != 0) {
       println(s"Failed to clone project from $projectLink")
+      val reportText =
+        s"Failed to clone project from $projectLink: \n${gitResult.out.text()}"
       return ProjectResult(
         path = projectLink,
         result = RunResult.FAILURE,
         diff = None,
-        report = Some(gitResult.err.text()).filter(_.nonEmpty)
+        report = Some(reportText).filter(_.nonEmpty)
       )
     }
     println(s"Cloned project to ${projectDir.toString}")

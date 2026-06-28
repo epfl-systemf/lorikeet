@@ -30,11 +30,13 @@ export default function RepoCard({
   ruleText,
   onCardClick,
   globalJob,
+  globalJobTime,
 }: {
   repo: RepoItem;
   ruleText?: string;
   onCardClick: (result: ProjectResult | null) => void;
   globalJob?: Job | null;
+  globalJobTime: number | null;
 }) {
   const [localStatus, setLocalStatus] = useState<RunStatus>("idle");
   const [lastRunRuleText, setLastRunRuleText] = useState<string | undefined>(
@@ -43,28 +45,28 @@ export default function RepoCard({
   const [localRunResult, setLocalRunResult] = useState<ProjectResult | null>(
     null,
   );
+  const [localJobTime, setLocalJobTime] = useState<number | null>(null);
 
+  const inGlobal = globalJob?.request.projectPaths.find((s) => s == repo.url);
   const globalRepoResult = globalJob?.results?.[repo.url];
 
-  let currentResult: ProjectResult | null = localRunResult;
-  let currentStatus: RunStatus = localStatus;
+  const isGlobal =
+    globalJob && inGlobal && (globalJobTime || 0) > (localJobTime || 0);
 
-  // if global job is active/running and includes this repo, override local state
-  if (globalJob && globalRepoResult) {
-    currentResult = globalRepoResult;
-
-    if (globalJob.status === "COMPLETED") {
-      currentStatus =
-        globalRepoResult.result === "SUCCESS" ? "completed" : "failed";
-    } else if (globalJob.status === "FAILED") {
-      currentStatus = "failed";
-    } else if (
-      globalJob.status === "RUNNING" ||
-      globalJob.status === "PENDING"
-    ) {
-      currentStatus = "running";
-    }
-  }
+  const currentResult: ProjectResult | null = isGlobal
+    ? globalRepoResult
+      ? globalRepoResult
+      : null
+    : localRunResult;
+  const currentStatus: RunStatus = isGlobal
+    ? globalRepoResult
+      ? globalRepoResult.result === "SUCCESS"
+        ? "completed"
+        : "failed"
+      : globalJob.status == "FAILED"
+        ? "failed"
+        : "running"
+    : localStatus;
 
   const handleRun = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -78,13 +80,14 @@ export default function RepoCard({
     try {
       setLocalStatus("running");
       setLastRunRuleText(ruleText);
+      setLocalJobTime(Date.now());
 
       const job = await submitRefactorJob({
         rule: ruleText,
         projectPaths: [repo.url],
       });
 
-      const completedJob = await pollJobUntilComplete(job.id);
+      const completedJob = await pollJobUntilComplete(job.id, (job: Job) => {});
       const result = completedJob.results[repo.url] || null;
 
       setLocalStatus(
@@ -98,7 +101,9 @@ export default function RepoCard({
   };
 
   const hasRuleChangedSinceRun =
-    currentStatus === "completed" && ruleText !== lastRunRuleText;
+    currentStatus === "completed" && isGlobal
+      ? ruleText !== globalJob.request.rule
+      : ruleText !== lastRunRuleText;
 
   return (
     <div

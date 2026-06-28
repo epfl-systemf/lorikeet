@@ -112,6 +112,7 @@ export function getJobStatus(jobId: string) {
 
 export async function pollJobUntilComplete(
   jobId: string,
+  updateCallback: (job: Job) => void,
   options: PollJobOptions = {},
 ) {
   const intervalMs = options.intervalMs ?? 2000;
@@ -128,6 +129,8 @@ export async function pollJobUntilComplete(
     if (job.status === "COMPLETED" || job.status === "FAILED") {
       return job;
     }
+
+    updateCallback(job);
 
     if (Date.now() - startedAt >= timeoutMs) {
       throw new ApiError(

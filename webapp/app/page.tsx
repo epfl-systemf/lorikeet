@@ -22,6 +22,7 @@ export default function Home() {
   const [activeSingleResult, setActiveSingleResult] =
     useState<ProjectResult | null>(null);
   const [activeGlobalJob, setActiveGlobalJob] = useState<Job | null>(null);
+  const [globalJobTime, setGlobalJobTime] = useState<number | null>(null);
   const [isGlobalRunning, setIsGlobalRunning] = useState(false);
   const [showGlobalSummary, setShowGlobalSummary] = useState(false);
 
@@ -61,8 +62,11 @@ export default function Home() {
       });
 
       setActiveGlobalJob(job);
+      setGlobalJobTime(Date.now());
 
-      const completedJob = await pollJobUntilComplete(job.id);
+      const completedJob = await pollJobUntilComplete(job.id, (job: Job) => {
+        setActiveGlobalJob(job);
+      });
       setActiveGlobalJob(completedJob);
       setShowGlobalSummary(true);
     } catch (e) {
@@ -120,6 +124,7 @@ export default function Home() {
               repo={repo}
               ruleText={editorValue}
               globalJob={activeGlobalJob}
+              globalJobTime={globalJobTime}
               onCardClick={(result) => {
                 if (!result) {
                   alert(

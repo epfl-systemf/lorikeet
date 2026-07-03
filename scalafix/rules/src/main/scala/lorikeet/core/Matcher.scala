@@ -3,8 +3,8 @@ package lorikeet.core
 import scalafix.v1._
 import scala.meta._
 import scala.meta.dialects.Scala3
-import lorikeet.core.metasyntax.common.*
-import lorikeet.core.metasyntax.pattern.*
+import metasyntax.common.*
+import metasyntax.pattern.*
 
 type MatchResult = Option[Bindings]
 
@@ -12,6 +12,9 @@ case class Matcher()(using
     doc: SemanticDocument,
     matchOptions: MatchOptions
 ) extends AbstractMatcher:
+
+  private lazy val defaults: Map[String, List[Symbol]] =
+    SymbolMatching.scalaDefaults
 
   def compare(
       pat: Tree,
@@ -36,6 +39,14 @@ case class Matcher()(using
       cand: Tree,
       bindings: Bindings
   ): MatchResult =
+    compareTrees(pat, cand, bindings, allowFqn = true)
+
+  def compareTrees(
+      pat: Tree,
+      cand: Tree,
+      bindings: Bindings,
+      allowFqn: Boolean = true
+  ): MatchResult =
     pat match
       case PatternBlock(pattern) =>
         matchWithPattern(pattern, cand, bindings)
@@ -51,11 +62,20 @@ case class Matcher()(using
           case _ => None
 
       // Optional semantic handling for fully qualified names in patterns
-      case SymbolMatching.FullyQualifiedName(fqn) if matchOptions.matchFqn =>
+      case SymbolMatching.FullyQualifiedName(fqn)
+          if matchOptions.matchFqn && allowFqn =>
         cand match
           case SymbolMatching.FullyQualifiedName(_)
-              if SymbolMatching.matchTreeWithFQN(cand, fqn) =>
+              if SymbolMatching.matchTreeWithFQN(cand, fqn, defaults) =>
             Some(bindings)
+          case _ => None
+      // A select that is not a qualified name cannot
+      // be a qualified name truncated
+      case Term.Select(qual, name) =>
+        cand match
+          case Term.Select(candQual, candName) =>
+            compareTrees(qual, candQual, bindings)
+              .flatMap(b => compareTrees(name, candName, b, allowFqn = false))
           case _ => None
 
       // Special handling for type ascriptions

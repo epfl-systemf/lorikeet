@@ -65,7 +65,7 @@ object Config:
         case None     => None
       val matchOptions = MatchOptions(
         matchAscriptions = rule.matchAscriptions.getOrElse(false),
-        matchFqn = rule.matchFqn.getOrElse(false),
+        matchFqn = rule.matchFqn.getOrElse(true),
         onlyPackages = rule.onlyPackages
       )
       CustomRule(

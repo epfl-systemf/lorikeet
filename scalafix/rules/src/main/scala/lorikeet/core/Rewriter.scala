@@ -49,9 +49,12 @@ case class Rewriter()(using
         val args = bindings.getOrThrow[List[Term]](name)
         Term.ArgClause(args, mod)
       // Mult vars for statement blocks
-      case Term.Block(List(MultName(name))) =>
-        val stats = bindings.getOrThrow[List[Stat]](name)
-        Term.Block(stats)
+      case Term.Block(stats) if stats.exists { case MultName(_) => true } =>
+        Term.Block(stats.flatMap {
+          case MultName(name) =>
+            bindings.getOrThrow[List[Stat]](name)
+          case stat => List(stat)
+        })
       // Bound variables
       case BoundVar(t) => t
     }

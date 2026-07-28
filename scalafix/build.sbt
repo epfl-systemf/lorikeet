@@ -14,6 +14,9 @@ inThisBuild(
         "https://github.com/systemf/lorikeet"
       )
     ),
+    licenses := List(
+      "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")
+    ),
     developers := List(
       Developer(
         "SidonieBouthors",

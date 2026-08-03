@@ -16,7 +16,7 @@ You need the following:
 Note the following Scala CLI annotations in the `SampleRule` class:
 
 ```scala
-//> using dep ch.epfl.systemf::lorikeet:0.1.0-SNAPSHOT
+//> using dep ch.epfl.systemf::lorikeet:0.1.0
 //> using resourceDir ./res
 ```
 
@@ -24,4 +24,4 @@ They specify the dependency on the Lorikeet library and the location of the reso
 
 Of course, you could also use an SBT project or otherwise, this is just a minimal example to show how to create a standalone Lorikeet rule.
 
-We can publish the rule locally using `scala-cli --power publish local .` and then use it in another project by adding the dependency `ch.epfl.systemf::sample-rule:0.1.0-SNAPSHOT` to the build file of that project.
+We can publish the rule locally using `scala-cli --power publish local .` and then use it in another project by adding the dependency `ch.epfl.systemf::sample-rule:0.1.0` to the build file of that project.

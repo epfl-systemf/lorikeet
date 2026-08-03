@@ -1,7 +1,7 @@
 val SBT_SCALAFIX_VERSION = "0.14.6"
 val SBT_SCALAFMT_VERSION = "2.6.1"
 val SCALAFMT_VERSION = "3.11.1"
-val LORIKEET_VERSION = "0.1.0-SNAPSHOT"
+val LORIKEET_VERSION = "0.1.0"
 val LORIKEET_DEPENDENCY =
   s""""ch.epfl.systemf" % "lorikeet_3" % "$LORIKEET_VERSION""""
 

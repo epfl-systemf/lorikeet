@@ -1,5 +1,5 @@
 //> using scala 3.7.0
-//> using dep ch.epfl.systemf::lorikeet:0.1.0-SNAPSHOT
+//> using dep ch.epfl.systemf::lorikeet:0.1.0
 //> using resourceDir ./res
 //> using publish.organization ch.epfl.systemf
 //> using publish.name sample-rule

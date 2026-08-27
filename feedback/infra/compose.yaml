@@ -1,0 +1,60 @@
+name: lorikeet-feedback
+
+services:
+  feedback:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: lorikeet-feedback:local
+    restart: unless-stopped
+    user: "${FEEDBACK_UID:-1000}:${FEEDBACK_GID:-1000}"
+    command: ["serve", "--directory", "/data", "--host", "0.0.0.0", "--port", "4173"]
+    ports:
+      - "${FEEDBACK_BIND_ADDRESS:-127.0.0.1}:${FEEDBACK_PORT:-4173}:4173"
+    volumes:
+      - "${FEEDBACK_DATA_DIR:-../../feedback-deployment}:/data"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4173/healthz', timeout=2)"
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    restart: unless-stopped
+    environment:
+      FEEDBACK_HOSTNAME: "${FEEDBACK_HOSTNAME:-feedback.example.edu}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      feedback:
+        condition: service_healthy
+
+volumes:
+  caddy-data:
+  caddy-config:

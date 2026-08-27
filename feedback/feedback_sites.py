@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import fcntl
 import hashlib
 import hmac
 import html
@@ -16,12 +17,15 @@ import json
 import mimetypes
 import re
 import secrets
+import shutil
 import sqlite3
 import statistics
 import sys
+import tempfile
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from functools import wraps
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -121,6 +125,27 @@ def utc_now() -> str:
 
 def stable_id(*parts: str, length: int = 16) -> str:
     return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()[:length]
+
+
+def review_key(course_title: str, assignment_title: str, review_id: str) -> str:
+    return stable_id(course_title, assignment_title, review_id, length=20)
+
+
+def serialized_deployment(operation):
+    """Prevent concurrent publishers from replacing the registry out of order."""
+
+    @wraps(operation)
+    def wrapped(args: argparse.Namespace) -> int:
+        private_dir = Path(args.deployment).resolve() / ".private"
+        private_dir.mkdir(parents=True, exist_ok=True)
+        with (private_dir / "publish.lock").open("a+", encoding="utf-8") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                return operation(args)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    return wrapped
 
 
 def parse_lint_report(path: Path) -> list[Issue]:
@@ -352,7 +377,7 @@ def render_student_page(payload: dict[str, Any], asset_version: str) -> str:
   <meta name="color-scheme" content="light">
   <meta name="referrer" content="no-referrer">
   <title>{title} feedback · Lorikeet</title>
-  <link rel="stylesheet" href="/assets/site.css?v={asset_version}">
+  <link rel="stylesheet" href="assets/site.css?v={asset_version}">
 </head>
 <body>
   <a class="skip-link" href="#app">Skip to feedback</a>
@@ -377,7 +402,7 @@ def render_student_page(payload: dict[str, Any], asset_version: str) -> str:
     </form>
   </dialog>
   <script id="feedback-data" type="application/json">{json_for_script(payload)}</script>
-  <script src="/assets/site.js?v={asset_version}" defer></script>
+  <script src="assets/site.js?v={asset_version}" defer></script>
 </body>
 </html>
 """
@@ -445,6 +470,9 @@ def generate_sites(args: argparse.Namespace) -> int:
         "course_title": args.course_title,
         "assignment_title": args.assignment_title,
         "review_id": args.review_id,
+        "review_key": review_key(
+            args.course_title, args.assignment_title, args.review_id
+        ),
         "sites": {},
     }
     links: list[dict[str, Any]] = []
@@ -502,6 +530,126 @@ def generate_sites(args: argparse.Namespace) -> int:
     return 0
 
 
+def rebuild_registry(deployment: Path) -> dict[str, Any]:
+    """Atomically rebuild the public-token registry from immutable reviews."""
+    deployment = deployment.resolve()
+    private_dir = deployment / ".private"
+    reviews_dir = deployment / "reviews"
+    private_dir.mkdir(parents=True, exist_ok=True)
+    reviews_dir.mkdir(parents=True, exist_ok=True)
+
+    registry: dict[str, Any] = {
+        "schema_version": 1,
+        "updated_at": utc_now(),
+        "reviews": {},
+        "sites": {},
+    }
+    for manifest_path in sorted(reviews_dir.glob("*/.private/manifest.json")):
+        if manifest_path.parents[1].name.startswith("."):
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        key = manifest.get("review_key")
+        if not isinstance(key, str) or not re.fullmatch(r"[a-f0-9]{20}", key):
+            raise ValueError(f"invalid review key in {manifest_path}")
+        review_root = manifest_path.parents[1]
+        expected_root = reviews_dir / key
+        if review_root != expected_root:
+            raise ValueError(f"review directory does not match its key: {review_root}")
+
+        review_metadata = {
+            "review_key": key,
+            "root": review_root.relative_to(deployment).as_posix(),
+            "generated_at": manifest.get("generated_at", ""),
+            "telemetry_mode": manifest.get("telemetry_mode", "research"),
+            "course_title": manifest.get("course_title", ""),
+            "assignment_title": manifest.get("assignment_title", ""),
+            "review_id": manifest.get("review_id", ""),
+            "sites_generated": len(manifest.get("sites", {})),
+        }
+        registry["reviews"][key] = review_metadata
+        for token, site in manifest.get("sites", {}).items():
+            if token in registry["sites"]:
+                raise ValueError(f"duplicate site token in review {key}")
+            registry["sites"][token] = {
+                "site_id": site["site_id"],
+                "review_key": key,
+                "root": review_metadata["root"],
+                "telemetry_mode": review_metadata["telemetry_mode"],
+            }
+
+    temporary = private_dir / f"registry.{secrets.token_hex(6)}.tmp"
+    temporary.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(private_dir / "registry.json")
+
+    asset_version = copy_assets(deployment)
+    course_titles = {
+        item["course_title"] for item in registry["reviews"].values()
+    }
+    landing_title = course_titles.pop() if len(course_titles) == 1 else "Course feedback"
+    (deployment / "index.html").write_text(
+        render_landing_page(landing_title, asset_version), encoding="utf-8"
+    )
+    return registry
+
+
+@serialized_deployment
+def publish_review(args: argparse.Namespace) -> int:
+    """Stage and atomically add one immutable review to a deployment."""
+    deployment = Path(args.deployment).resolve()
+    reviews_dir = deployment / "reviews"
+    reviews_dir.mkdir(parents=True, exist_ok=True)
+    key = review_key(args.course_title, args.assignment_title, args.review_id)
+    final_dir = reviews_dir / key
+    if final_dir.exists():
+        raise ValueError(
+            f"review {args.review_id!r} already exists; use a new review ID"
+        )
+
+    secret_path = deployment / ".private" / "secret.key"
+    load_or_create_secret(secret_path)
+    staging_dir = Path(
+        tempfile.mkdtemp(prefix=f".{key}.", dir=reviews_dir)
+    ).resolve()
+    published = False
+    try:
+        generation_args = argparse.Namespace(
+            reports=args.reports,
+            diffs=args.diffs,
+            output=str(staging_dir),
+            roster=args.roster,
+            course_title=args.course_title,
+            assignment_title=args.assignment_title,
+            review_id=args.review_id,
+            base_url=args.base_url,
+            secret_file=str(secret_path),
+            telemetry=args.telemetry,
+        )
+        generate_sites(generation_args)
+        staging_dir.rename(final_dir)
+        published = True
+        registry = rebuild_registry(deployment)
+    except Exception:
+        if not published and staging_dir.exists():
+            shutil.rmtree(staging_dir)
+        raise
+
+    print(f"Published review {args.review_id!r} as {key}")
+    print(f"Registered reviews: {len(registry['reviews'])}")
+    print(f"Student links: {final_dir / '.private' / 'links.csv'}")
+    return 0
+
+
+@serialized_deployment
+def reindex_deployment(args: argparse.Namespace) -> int:
+    deployment = Path(args.deployment).resolve()
+    registry = rebuild_registry(deployment)
+    print(
+        f"Registered {len(registry['reviews'])} review(s) and "
+        f"{len(registry['sites'])} site(s)"
+    )
+    return 0
+
+
 def connect_database(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=10)
@@ -519,13 +667,23 @@ def connect_database(path: Path) -> sqlite3.Connection:
           client_ts TEXT,
           item_id TEXT,
           properties_json TEXT NOT NULL,
-          collection_basis TEXT NOT NULL
+          collection_basis TEXT NOT NULL,
+          review_key TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS events_site_event ON events(site_id, event_name);
         CREATE INDEX IF NOT EXISTS events_session ON events(session_id, server_ts);
         CREATE TABLE IF NOT EXISTS metadata (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS reviews (
+          review_key TEXT PRIMARY KEY,
+          course_title TEXT NOT NULL,
+          assignment_title TEXT NOT NULL,
+          review_id TEXT NOT NULL,
+          generated_at TEXT NOT NULL,
+          telemetry_mode TEXT NOT NULL,
+          sites_generated INTEGER NOT NULL
         );
         """
     )
@@ -535,6 +693,10 @@ def connect_database(path: Path) -> sqlite3.Connection:
     if "collection_basis" not in event_columns:
         connection.execute(
             "ALTER TABLE events ADD COLUMN collection_basis TEXT NOT NULL DEFAULT 'ethics_approved'"
+        )
+    if "review_key" not in event_columns:
+        connection.execute(
+            "ALTER TABLE events ADD COLUMN review_key TEXT NOT NULL DEFAULT ''"
         )
     return connection
 
@@ -557,21 +719,76 @@ class FeedbackServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, address: tuple[str, int], root: Path, database: Path):
-        self.root = root
-        manifest_path = root / ".private" / "manifest.json"
-        self.manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.telemetry_mode = self.manifest.get("telemetry_mode", "access")
+        self.root = root.resolve()
         self.database_path = database
         self.db_lock = threading.Lock()
+        self.registry_lock = threading.Lock()
+        self.registry_mtime_ns = -1
+        self.manifest: dict[str, Any] = {"sites": {}}
+        self.reviews: dict[str, dict[str, Any]] = {}
+        self.telemetry_mode = "off"
+        self.refresh_registry(force=True)
         super().__init__(address, FeedbackHandler)
+
+    def refresh_registry(self, force: bool = False) -> None:
+        registry_path = self.root / ".private" / "registry.json"
+        manifest_path = self.root / ".private" / "manifest.json"
+        source_path = registry_path if registry_path.exists() else manifest_path
+        if not source_path.exists():
+            raise ValueError(f"{self.root} is not a feedback deployment")
+        source_mtime = source_path.stat().st_mtime_ns
+        if not force and source_mtime == self.registry_mtime_ns:
+            return
+
+        with self.registry_lock:
+            source_mtime = source_path.stat().st_mtime_ns
+            if not force and source_mtime == self.registry_mtime_ns:
+                return
+            source = json.loads(source_path.read_text(encoding="utf-8"))
+            if source_path == registry_path:
+                sites = source.get("sites", {})
+                reviews = source.get("reviews", {})
+            else:
+                key = source.get("review_key") or review_key(
+                    str(source.get("course_title", "")),
+                    str(source.get("assignment_title", "")),
+                    str(source.get("review_id", "review-1")),
+                )
+                review = {
+                    "review_key": key,
+                    "root": ".",
+                    "generated_at": source.get("generated_at", ""),
+                    "telemetry_mode": source.get("telemetry_mode", "research"),
+                    "course_title": source.get("course_title", ""),
+                    "assignment_title": source.get("assignment_title", ""),
+                    "review_id": source.get("review_id", ""),
+                    "sites_generated": len(source.get("sites", {})),
+                }
+                reviews = {key: review}
+                sites = {
+                    token: {
+                        "site_id": site["site_id"],
+                        "review_key": key,
+                        "root": ".",
+                        "telemetry_mode": review["telemetry_mode"],
+                    }
+                    for token, site in source.get("sites", {}).items()
+                }
+
+            modes = {site.get("telemetry_mode", "research") for site in sites.values()}
+            self.manifest = {"sites": sites}
+            self.reviews = reviews
+            self.telemetry_mode = modes.pop() if len(modes) == 1 else "mixed"
+            self.registry_mtime_ns = source_mtime
+        self.sync_review_metadata()
+
+    def sync_review_metadata(self) -> None:
         metadata = {
-            "schema_version": str(self.manifest.get("schema_version", SCHEMA_VERSION)),
-            "generated_at": str(self.manifest.get("generated_at", "")),
+            "schema_version": str(SCHEMA_VERSION),
+            "registry_updated_at": utc_now(),
             "telemetry_mode": self.telemetry_mode,
-            "course_title": str(self.manifest.get("course_title", "")),
-            "assignment_title": str(self.manifest.get("assignment_title", "")),
-            "review_id": str(self.manifest.get("review_id", "")),
-            "sites_generated": str(len(self.manifest.get("sites", {}))),
+            "sites_generated": str(len(self.manifest["sites"])),
+            "reviews_generated": str(len(self.reviews)),
         }
         with self.db_lock:
             db = connect_database(self.database_path)
@@ -580,26 +797,63 @@ class FeedbackServer(ThreadingHTTPServer):
                     "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
                     metadata.items(),
                 )
+                db.executemany(
+                    """INSERT OR REPLACE INTO reviews
+                    (review_key, course_title, assignment_title, review_id,
+                     generated_at, telemetry_mode, sites_generated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    [
+                        (
+                            key,
+                            str(review.get("course_title", "")),
+                            str(review.get("assignment_title", "")),
+                            str(review.get("review_id", "")),
+                            str(review.get("generated_at", "")),
+                            str(review.get("telemetry_mode", "research")),
+                            int(review.get("sites_generated", 0)),
+                        )
+                        for key, review in self.reviews.items()
+                    ],
+                )
                 db.commit()
             finally:
                 db.close()
+
+    def site_info(self, token: str) -> dict[str, Any] | None:
+        self.refresh_registry()
+        site = self.manifest["sites"].get(token)
+        return dict(site) if site else None
+
+    def site_root(self, token: str) -> Path | None:
+        site = self.site_info(token)
+        if site is None:
+            return None
+        candidate = (self.root / str(site.get("root", "."))).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError:
+            return None
+        return candidate
 
     def accept_event(self, body: dict[str, Any]) -> tuple[bool, str]:
         token = body.get("token")
         session_id = body.get("session_id")
         event_name = body.get("event_name")
-        if not isinstance(token, str) or token not in self.manifest["sites"]:
+        site = self.site_info(token) if isinstance(token, str) else None
+        if site is None:
             return False, "unknown site"
         if not isinstance(session_id, str) or not re.fullmatch(r"[A-Za-z0-9-]{16,64}", session_id):
             return False, "invalid session"
         if event_name not in EVENT_NAMES:
             return False, "unknown event"
-        if self.telemetry_mode == "off":
+        telemetry_mode = site.get("telemetry_mode", "research")
+        if telemetry_mode == "off":
             return True, "disabled"
-        if self.telemetry_mode == "access":
+        if telemetry_mode == "access":
             return True, "ignored"
 
-        site_id = self.manifest["sites"][token]["site_id"]
+        site_id = site["site_id"]
+        key = site.get("review_key", "")
         with self.db_lock:
             db = connect_database(self.database_path)
             try:
@@ -613,8 +867,9 @@ class FeedbackServer(ThreadingHTTPServer):
                 db.execute(
                     """INSERT INTO events
                     (schema_version, site_id, session_id, event_name, server_ts,
-                     client_ts, item_id, properties_json, collection_basis)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     client_ts, item_id, properties_json, collection_basis,
+                     review_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         SCHEMA_VERSION,
                         site_id,
@@ -625,6 +880,7 @@ class FeedbackServer(ThreadingHTTPServer):
                         item_id,
                         json.dumps(properties, separators=(",", ":")),
                         "ethics_approved",
+                        key,
                     ),
                 )
                 db.commit()
@@ -634,17 +890,19 @@ class FeedbackServer(ThreadingHTTPServer):
 
     def record_access(self, token: str) -> None:
         """Record access from the HTML request itself, independent of JavaScript."""
-        if self.telemetry_mode == "off":
+        site = self.site_info(token)
+        if site is None or site.get("telemetry_mode", "research") == "off":
             return
-        site_id = self.manifest["sites"][token]["site_id"]
+        site_id = site["site_id"]
         with self.db_lock:
             db = connect_database(self.database_path)
             try:
                 db.execute(
                     """INSERT INTO events
                     (schema_version, site_id, session_id, event_name, server_ts,
-                     client_ts, item_id, properties_json, collection_basis)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     client_ts, item_id, properties_json, collection_basis,
+                     review_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         SCHEMA_VERSION,
                         site_id,
@@ -655,6 +913,7 @@ class FeedbackServer(ThreadingHTTPServer):
                         None,
                         "{}",
                         "ethics_approved",
+                        site.get("review_key", ""),
                     ),
                 )
                 db.commit()
@@ -721,21 +980,43 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         request_path = parsed.path
         access_token: str | None = None
+        target: Path | None = None
         if request_path == "/healthz":
-            self.send_json(HTTPStatus.OK, {"status": "ok", "telemetry": self.server.telemetry_mode})
+            self.server.refresh_registry()
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "telemetry": self.server.telemetry_mode,
+                    "reviews": len(self.server.reviews),
+                    "sites": len(self.server.manifest["sites"]),
+                },
+            )
             return
         if request_path == "/":
-            relative = Path("index.html")
+            target = self.server.root / "index.html"
         elif re.fullmatch(r"/assets/(site\.css|site\.js)", request_path):
-            relative = Path(request_path.lstrip("/"))
+            target = self.server.root / Path(request_path.lstrip("/"))
         else:
-            match = re.fullmatch(r"/f/([a-f0-9]{32})/?", request_path)
-            if not match or match.group(1) not in self.server.manifest["sites"]:
+            page_match = re.fullmatch(r"/f/([a-f0-9]{32})/?", request_path)
+            asset_match = re.fullmatch(
+                r"/f/([a-f0-9]{32})/assets/(site\.css|site\.js)",
+                request_path,
+            )
+            token = (
+                page_match.group(1)
+                if page_match
+                else asset_match.group(1) if asset_match else None
+            )
+            site_root = self.server.site_root(token) if token else None
+            if token is None or site_root is None:
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
-            relative = Path("f") / match.group(1) / "index.html"
-            access_token = match.group(1)
-        target = self.server.root / relative
+            if page_match:
+                target = site_root / "f" / token / "index.html"
+                access_token = token
+            else:
+                target = site_root / "assets" / asset_match.group(2)
         if not target.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -751,7 +1032,11 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.send_header(
             "Cache-Control",
-            "public, max-age=3600" if request_path.startswith("/assets/") else "no-store",
+            (
+                "public, max-age=3600"
+                if "/assets/" in request_path
+                else "no-store"
+            ),
         )
         self.end_headers()
         self.wfile.write(content)
@@ -760,7 +1045,8 @@ class FeedbackHandler(BaseHTTPRequestHandler):
 def serve_sites(args: argparse.Namespace) -> int:
     root = Path(args.directory).resolve()
     manifest = root / ".private" / "manifest.json"
-    if not manifest.exists():
+    registry = root / ".private" / "registry.json"
+    if not manifest.exists() and not registry.exists():
         raise ValueError(f"{root} is not a generated feedback directory")
     database = (
         Path(args.database).resolve()
@@ -801,10 +1087,19 @@ def read_metadata(database: Path) -> dict[str, str]:
         db.close()
 
 
-def summarize_events(
-    rows: list[dict[str, Any]], metadata: dict[str, str] | None = None
-) -> dict[str, Any]:
-    metadata = metadata or {}
+def read_reviews(database: Path) -> list[dict[str, Any]]:
+    db = connect_database(database)
+    try:
+        columns = [column[1] for column in db.execute("PRAGMA table_info(reviews)")]
+        return [
+            dict(zip(columns, values))
+            for values in db.execute("SELECT * FROM reviews ORDER BY generated_at")
+        ]
+    finally:
+        db.close()
+
+
+def engagement_metrics(rows: list[dict[str, Any]], sites_generated: int) -> dict[str, Any]:
     opened = {row["site_id"] for row in rows if row["event_name"] == "site_access"}
     browser_opened = {row["site_id"] for row in rows if row["event_name"] == "page_open"}
     sessions = {
@@ -822,14 +1117,13 @@ def summarize_events(
         for row in rows
         if row["event_name"] == "item_dwell"
     ]
-    sites_generated = int(metadata.get("sites_generated", "0") or 0)
     return {
-        "generated_at": utc_now(),
-        "study": metadata,
         "events": len(rows),
         "sites_generated": sites_generated or None,
         "sites_accessed": len(opened),
-        "access_rate": round(len(opened) / sites_generated, 4) if sites_generated else None,
+        "access_rate": round(len(opened) / sites_generated, 4)
+        if sites_generated
+        else None,
         "personalized_html_requests": sum(
             row["event_name"] == "site_access" for row in rows
         ),
@@ -842,12 +1136,46 @@ def summarize_events(
             round(statistics.median(active_seconds), 1) if active_seconds else None
         ),
         "items_viewed": sum(row["event_name"] == "item_view" for row in rows),
-        "median_item_visible_seconds": round(statistics.median(dwell_seconds), 1)
-        if dwell_seconds
-        else None,
-        "rewrites_explored": sum(row["event_name"] == "rewrite_view" for row in rows),
-        "rewrite_toggles": sum(row["event_name"] == "rewrite_toggle" for row in rows),
+        "median_item_visible_seconds": (
+            round(statistics.median(dwell_seconds), 1) if dwell_seconds else None
+        ),
+        "rewrites_explored": sum(
+            row["event_name"] == "rewrite_view" for row in rows
+        ),
+        "rewrite_toggles": sum(
+            row["event_name"] == "rewrite_toggle" for row in rows
+        ),
     }
+
+
+def summarize_events(
+    rows: list[dict[str, Any]],
+    metadata: dict[str, str] | None = None,
+    reviews: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    metadata = metadata or {}
+    sites_generated = int(metadata.get("sites_generated", "0") or 0)
+    summary = {
+        "generated_at": utc_now(),
+        "study": metadata,
+        **engagement_metrics(rows, sites_generated),
+    }
+    if reviews:
+        summary["reviews"] = {
+            review["review_key"]: {
+                "study": review,
+                **engagement_metrics(
+                    [
+                        row
+                        for row in rows
+                        if row.get("review_key") == review["review_key"]
+                    ],
+                    int(review["sites_generated"]),
+                ),
+            }
+            for review in reviews
+        }
+    return summary
 
 
 def export_telemetry(args: argparse.Namespace) -> int:
@@ -865,6 +1193,7 @@ def export_telemetry(args: argparse.Namespace) -> int:
         "client_ts",
         "item_id",
         "collection_basis",
+        "review_key",
         "properties",
     ]
     with (output / "events.csv").open("w", encoding="utf-8", newline="") as handle:
@@ -874,7 +1203,7 @@ def export_telemetry(args: argparse.Namespace) -> int:
             row = dict(row)
             row["properties"] = json.dumps(row["properties"], separators=(",", ":"))
             writer.writerow({key: row.get(key) for key in event_fields})
-    summary = summarize_events(rows, read_metadata(database))
+    summary = summarize_events(rows, read_metadata(database), read_reviews(database))
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(rows)} event(s) to {output}")
     return 0
@@ -882,9 +1211,34 @@ def export_telemetry(args: argparse.Namespace) -> int:
 
 def print_summary(args: argparse.Namespace) -> int:
     database = Path(args.database).resolve()
-    summary = summarize_events(event_rows(database), read_metadata(database))
+    summary = summarize_events(
+        event_rows(database), read_metadata(database), read_reviews(database)
+    )
     print(json.dumps(summary, indent=2))
     return 0
+
+
+def add_review_arguments(
+    parser: argparse.ArgumentParser, *, review_id_required: bool
+) -> None:
+    parser.add_argument("--reports", required=True, help="directory containing *.lint.txt")
+    parser.add_argument("--diffs", required=True, help="directory containing *.diff")
+    parser.add_argument("--roster", help="optional CSV: student_id,attempt,display_name")
+    parser.add_argument("--course-title", default="Intro to Software Construction")
+    parser.add_argument("--assignment-title", default="Programming assignment")
+    parser.add_argument(
+        "--review-id",
+        required=review_id_required,
+        default=None if review_id_required else "review-1",
+        help="immutable identifier distinguishing reviews of the same assignment",
+    )
+    parser.add_argument("--base-url", default="http://127.0.0.1:4173")
+    parser.add_argument(
+        "--telemetry",
+        choices=("off", "access", "research"),
+        default="research",
+        help="off, server-side access only, or automatic research interaction telemetry",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -892,25 +1246,25 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     generate = subparsers.add_parser("generate", help="generate personalized sites")
-    generate.add_argument("--reports", required=True, help="directory containing *.lint.txt")
-    generate.add_argument("--diffs", required=True, help="directory containing *.diff")
+    add_review_arguments(generate, review_id_required=False)
     generate.add_argument("--output", required=True, help="generated site directory")
-    generate.add_argument("--roster", help="optional CSV: student_id,attempt,display_name")
-    generate.add_argument("--course-title", default="Intro to Software Construction")
-    generate.add_argument("--assignment-title", default="Programming assignment")
-    generate.add_argument(
-        "--review-id", default="review-1",
-        help="stable identifier distinguishing repeated reviews of the same assignment",
-    )
-    generate.add_argument("--base-url", default="http://127.0.0.1:4173")
     generate.add_argument(
         "--secret-file", help="stable HMAC secret; defaults inside private output"
     )
-    generate.add_argument(
-        "--telemetry", choices=("off", "access", "research"), default="research",
-        help="off, server-side access only, or automatic research interaction telemetry",
-    )
     generate.set_defaults(func=generate_sites)
+
+    publish = subparsers.add_parser(
+        "publish", help="atomically add a review to a running deployment"
+    )
+    add_review_arguments(publish, review_id_required=True)
+    publish.add_argument("--deployment", required=True)
+    publish.set_defaults(func=publish_review)
+
+    reindex = subparsers.add_parser(
+        "reindex", help="rebuild a deployment registry from published reviews"
+    )
+    reindex.add_argument("--deployment", required=True)
+    reindex.set_defaults(func=reindex_deployment)
 
     serve = subparsers.add_parser("serve", help="serve sites and collect telemetry")
     serve.add_argument("--directory", required=True)

@@ -138,6 +138,105 @@ or link scanner can request a URL without a student actually reading it. Treat
 `site_access` as delivery/access evidence and corroborate it with `page_open`,
 item exposure, and dwell events when analyzing engagement.
 
+## Persistent deployment and incremental reviews
+
+Use `generate` for a disposable preview of one review. Use `publish` for a
+long-running course server. A deployment holds one shared secret, one telemetry
+database, and any number of immutable assignment reviews:
+
+```text
+feedback-deployment/
+├── .private/
+│   ├── registry.json          # atomically replaced routing index
+│   ├── secret.key             # stable pseudonymous URL key
+│   └── telemetry.sqlite3      # events from every review
+└── reviews/
+    └── <review-key>/          # complete static output for one review
+```
+
+Publish a review directly from the host with:
+
+```bash
+python3 feedback/feedback_sites.py publish \
+  --deployment feedback-deployment \
+  --reports grading_reports_2026.08.05_14.55.17 \
+  --diffs grading_diffs_2026.08.05_14.55.17 \
+  --roster grading_results_2026.08.05_14.55.17.csv \
+  --course-title "Intro to Software Construction" \
+  --assignment-title "Find" \
+  --review-id "find-2026-review-1" \
+  --base-url https://feedback.example.edu \
+  --telemetry research
+```
+
+Publication is serialized with a filesystem lock. Files are generated in a
+staging directory, the finished review is renamed into place, and then
+`registry.json` is atomically replaced. A running server checks that registry's
+modification time on each page or event request. Consequently, a newly
+published assignment becomes available without a server restart, while all old
+student URLs continue to resolve to their original content.
+
+The same course/assignment/review ID cannot be published twice. Use a new
+review ID for corrections or a second feedback pass. This immutability keeps
+content, distributed links, and telemetry attribution aligned. If a publication
+is interrupted after its review directory is moved but before registration,
+rebuild the registry with:
+
+```bash
+python3 feedback/feedback_sites.py reindex \
+  --deployment feedback-deployment
+```
+
+The SQLite event table includes `review_key`, and summaries contain both global
+metrics and a per-review breakdown. Back up the entire deployment directory;
+in particular, losing `secret.key` prevents reproducing existing URLs, while
+losing the private links files removes the student-identity crosswalk.
+
+### Container deployment
+
+Infrastructure files live in `feedback/infra`. They run the Python server as an
+unprivileged host UID/GID, mount persistent data separately from the image,
+drop Linux capabilities, use a read-only container filesystem, configure a
+health check, and restart the service automatically.
+
+Prepare a host directory and configuration:
+
+```bash
+cp feedback/infra/.env.example feedback/infra/.env
+mkdir -p /srv/lorikeet-feedback
+chown 1000:1000 /srv/lorikeet-feedback
+```
+
+Edit `.env` to set the absolute data path and deployment UID/GID. Publish the
+first review before starting the server:
+
+```bash
+export REPORTS_DIR=$PWD/grading_reports_2026.08.05_14.55.17
+export DIFFS_DIR=$PWD/grading_diffs_2026.08.05_14.55.17
+export ROSTER_FILE=$PWD/grading_results_2026.08.05_14.55.17.csv
+export COURSE_TITLE="Intro to Software Construction"
+export ASSIGNMENT_TITLE="Find"
+export REVIEW_ID="find-2026-review-1"
+export FEEDBACK_BASE_URL="https://feedback.example.edu"
+feedback/infra/publish-review.sh
+
+feedback/infra/deploy.sh
+```
+
+For TLS termination with Caddy and a DNS name pointing at the server:
+
+```bash
+ENABLE_TLS=1 feedback/infra/deploy.sh
+```
+
+For every later assignment or review, set the new report paths, assignment
+title, and unique review ID, then rerun `publish-review.sh`. The script mounts
+grading artifacts read-only into a one-shot container and writes only to the
+persistent deployment directory. The already-running `feedback` container does
+not need rebuilding or restarting. This command is also the intended CI/CD
+integration boundary: a grading job can transfer its three artifact paths to
+the host and invoke the publisher after instructor approval.
+
 Get a quick aggregate view:
 
 ```bash

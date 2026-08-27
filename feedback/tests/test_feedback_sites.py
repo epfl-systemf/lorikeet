@@ -2,11 +2,12 @@ import argparse
 import csv
 import json
 import sqlite3
+import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
-
-import sys
+from urllib.request import urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -111,7 +112,10 @@ class GenerationTests(unittest.TestCase):
             success_page = next(
                 (output / "f" / token / "index.html").read_text()
                 for token, metadata in manifest["sites"].items()
-                if metadata["site_id"] == next(row["site_id"] for row in links if row["student_id"] == "s-200")
+                if metadata["site_id"]
+                == next(
+                    row["site_id"] for row in links if row["student_id"] == "s-200"
+                )
             )
             self.assertIn('"status":"success"', success_page)
             self.assertNotIn('class="topbar"', success_page)
@@ -119,7 +123,10 @@ class GenerationTests(unittest.TestCase):
             issue_page = next(
                 (output / "f" / token / "index.html").read_text()
                 for token, metadata in manifest["sites"].items()
-                if metadata["site_id"] == next(row["site_id"] for row in links if row["student_id"] == "s-100")
+                if metadata["site_id"]
+                == next(
+                    row["site_id"] for row in links if row["student_id"] == "s-100"
+                )
             )
             marker = '<script id="feedback-data" type="application/json">'
             payload = json.loads(issue_page.split(marker, 1)[1].split("</script>", 1)[0])
@@ -188,6 +195,103 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual([row[0] for row in rows], ["page_open", "item_dwell", "site_access"])
             self.assertNotIn("source_code", rows[1][1])
             self.assertIn("visible_seconds", rows[1][1])
+
+
+class IncrementalDeploymentTests(unittest.TestCase):
+    def publish_args(
+        self,
+        root: Path,
+        reports: Path,
+        diffs: Path,
+        roster: Path,
+        review_id: str,
+    ) -> argparse.Namespace:
+        return argparse.Namespace(
+            deployment=str(root / "deployment"),
+            reports=str(reports),
+            diffs=str(diffs),
+            roster=str(roster),
+            course_title="Construction",
+            assignment_title="Find",
+            review_id=review_id,
+            base_url="http://localhost:4173",
+            telemetry="research",
+        )
+
+    def test_running_server_discovers_atomically_published_reviews(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reports = root / "reports"
+            diffs = root / "diffs"
+            reports.mkdir()
+            diffs.mkdir()
+            (reports / "s-100-2.lint.txt").write_text(LINT, encoding="utf-8")
+            (diffs / "s-100-2-find.scala.diff").write_text(DIFF, encoding="utf-8")
+            roster = root / "roster.csv"
+            roster.write_text(
+                "student_id,attempt,status,display_name\n"
+                "s-100,2,issues,\n",
+                encoding="utf-8",
+            )
+            deployment = root / "deployment"
+            sites.publish_review(
+                self.publish_args(root, reports, diffs, roster, "review-a")
+            )
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                sites.publish_review(
+                    self.publish_args(root, reports, diffs, roster, "review-a")
+                )
+            registry = json.loads(
+                (deployment / ".private" / "registry.json").read_text()
+            )
+            first_token = next(iter(registry["sites"]))
+
+            database = deployment / ".private" / "telemetry.sqlite3"
+            server = sites.FeedbackServer(("127.0.0.1", 0), deployment, database)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                with urlopen(f"{base_url}/f/{first_token}/") as response:
+                    self.assertEqual(response.status, 200)
+                    page = response.read().decode("utf-8")
+                with urlopen(
+                    f"{base_url}/f/{first_token}/assets/site.js"
+                ) as response:
+                    self.assertEqual(response.status, 200)
+                self.assertIn("assets/site.js?v=", page)
+
+                sites.publish_review(
+                    self.publish_args(root, reports, diffs, roster, "review-b")
+                )
+                updated_registry = json.loads(
+                    (deployment / ".private" / "registry.json").read_text()
+                )
+                second_token = next(
+                    token
+                    for token in updated_registry["sites"]
+                    if token != first_token
+                )
+                with urlopen(f"{base_url}/f/{second_token}/") as response:
+                    self.assertEqual(response.status, 200)
+                with urlopen(f"{base_url}/healthz") as response:
+                    health = json.load(response)
+                self.assertEqual(health["reviews"], 2)
+                self.assertEqual(health["sites"], 2)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+            rows = sites.event_rows(database)
+            self.assertEqual(
+                len({row["review_key"] for row in rows if row["event_name"] == "site_access"}),
+                2,
+            )
+            summary = sites.summarize_events(
+                rows, sites.read_metadata(database), sites.read_reviews(database)
+            )
+            self.assertEqual(len(summary["reviews"]), 2)
 
 
 if __name__ == "__main__":

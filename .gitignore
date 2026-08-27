@@ -47,6 +47,8 @@ bin/
 
 # personalized feedback output (contains private links and telemetry)
 generated_feedback*/
+feedback-deployment/
+feedback/infra/.env
 
 # grading run output
 grading_diffs_*/

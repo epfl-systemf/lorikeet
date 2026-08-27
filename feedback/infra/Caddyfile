@@ -1,0 +1,9 @@
+{$FEEDBACK_HOSTNAME} {
+  encode zstd gzip
+  reverse_proxy feedback:4173
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    -Server
+  }
+}

@@ -40,6 +40,12 @@ original/suggested rewrite comparison and a local SQLite telemetry server. The
 server records personalized-site access directly and can collect implicit,
 pseudonymous engagement telemetry for an approved study.
 
+For a persistent server, the generator can atomically publish additional
+assignment reviews into a live deployment without invalidating earlier links or
+restarting the process. Container, health-check, and optional TLS automation are
+provided under [`feedback/infra`](feedback/infra); see the feedback guide for
+the operational workflow.
+
 ## Usage
 
 This section describes how to use Lorikeet:

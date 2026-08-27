@@ -44,3 +44,11 @@ bin/
 
 # general
 *.class
+
+# personalized feedback output (contains private links and telemetry)
+generated_feedback*/
+
+# grading run output
+grading_diffs_*/
+grading_reports_*/
+grading_results_*.csv

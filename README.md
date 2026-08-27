@@ -4,7 +4,7 @@ Lorikeet is a Scalafix-based code quality feedback tool that lets you define cus
 
 Writing rules requires no knowledge of Scala's AST or the Scalafix API, and allows you to express complex patterns and rewrites with a simple and intuitive syntax.
 
-The included script [Check.scala](scripts/Check.scala) allows easily running a set of custom rules on a large number of student submissions, and provides detailed feedback and statistics on the results.
+The included script [Check.scala](grading/scripts/Check.scala) allows easily running a set of custom rules on a large number of student submissions, and provides detailed feedback and statistics on the results.
 
 ## ️Supported Scala Versions
 
@@ -30,6 +30,15 @@ This repo is structured as follows:
 ```
 
 See the README in the respective subfolders for more information.
+
+## Publishing Personalized Student Feedback
+
+The standalone [feedback site generator](feedback/README.md) turns a grading
+run's lint reports, rewrites, and results roster into one private-link website
+per student, assignment, and review. It includes a focused diff plus interactive
+original/suggested rewrite comparison and a local SQLite telemetry server. The
+server records personalized-site access directly and can collect implicit,
+pseudonymous engagement telemetry for an approved study.
 
 ## Usage
 
@@ -77,7 +86,7 @@ This is because sbt task caching will avoid rerunning a task that has already be
 
 ### Running a Check on Student Submissions
 
-See script [Check.scala](scripts/Check.scala).
+See script [Check.scala](grading/scripts/Check.scala).
 
 This script expects a submission directory with the following structure:
 

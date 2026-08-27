@@ -424,6 +424,33 @@ object CheckTool:
     exitCode
   }
 
+  def writeResultsCsv(results: Seq[CheckResult], output: Path): Unit = {
+    def csv(value: String): String =
+      s"\"${value.replace("\"", "\"\"")}\""
+
+    val rows = results.flatMap {
+      case NoSubmission(_) => None
+      case MissingFiles(studentId, attempt, _) =>
+        Some(Seq(studentId, attempt.toString, "missing_files", ""))
+      case CompileError(studentId, attempt) =>
+        Some(Seq(studentId, attempt.toString, "compile_error", ""))
+      case IssuesFound(studentId, attempt, _) =>
+        Some(Seq(studentId, attempt.toString, "issues", ""))
+      case Success(studentId, attempt) =>
+        Some(Seq(studentId, attempt.toString, "success", ""))
+    }
+    val contents =
+      (Seq("student_id", "attempt", "status", "display_name") +:
+        rows).map(_.map(csv).mkString(",")).mkString("\n") + "\n"
+    Files.writeString(
+      output,
+      contents,
+      StandardCharsets.UTF_8,
+      StandardOpenOption.CREATE,
+      StandardOpenOption.TRUNCATE_EXISTING
+    )
+  }
+
   @main
   def run(): Unit = {
 
@@ -459,6 +486,9 @@ object CheckTool:
 
     val results: Seq[CheckResult] =
       studentDirs.map(dir => checkStudent(dir, cfg))
+
+    val resultsCsv = ROOT.resolve(s"grading_results_$timestamp.csv")
+    writeResultsCsv(results, resultsCsv)
 
     val totalSubmissions = results.length
     val missingFiles = results.count {
@@ -510,5 +540,6 @@ Submissions failing check: $ruleMatches
       println(f"  $rule: $count")
     }
 
-    println(s"\nGrading complete.")
+    println(s"\nResults roster: $resultsCsv")
+    println(s"Grading complete.")
   }

@@ -1,0 +1,8 @@
+--- /home/kpi/lorikeet/tmp/lint.pre-find.scala	2026-08-25 17:32:44.160374488 +0200
++++ /home/kpi/lorikeet/tmp/lint.post-find.scala	2026-08-25 17:32:44.867048223 +0200
+@@ -4,4 +4,4 @@
+   var counter: Int = 0
+ 
+   def simplifiedCondition(ready: Boolean): Boolean =
+-    if ready then false else !ready
++    !ready && !ready

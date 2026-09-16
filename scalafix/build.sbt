@@ -11,7 +11,7 @@ inThisBuild(
     organization := "ch.epfl.systemf",
     homepage := Some(
       url(
-        "https://github.com/systemf/lorikeet"
+        "https://github.com/epfl-systemf/lorikeet"
       )
     ),
     licenses := List(

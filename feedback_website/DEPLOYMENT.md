@@ -34,8 +34,8 @@ access or run the deployment. For the first deployment:
 cd /home/web
 git clone --branch deployment https://github.com/epfl-systemf/lorikeet.git lorikeet
 cd lorikeet
-docker compose -f compose.feedback.yaml up -d --build
-docker compose -f compose.feedback.yaml ps
+sh feedback_website/deploy/docker.sh up -d --build
+sh feedback_website/deploy/docker.sh ps
 curl -I http://127.0.0.1:8765/
 ```
 
@@ -48,26 +48,55 @@ For subsequent updates:
 ```bash
 cd /home/web/lorikeet
 git pull --ff-only
-docker compose -f compose.feedback.yaml up -d --build
+sh feedback_website/deploy/docker.sh up -d --build
 ```
 
 The image includes the generated pages, so rebuild after pulling new pages.
-Interaction logs are stored in Docker volume `lorikeet-feedback-logs`, at
-`/var/lib/lorikeet-feedback` inside the container. This replaces the host log
-directory used in the non-Docker instructions. Existing host logs are not
-automatically imported. View or export them with:
+Interaction logs are bind-mounted from the host directory
+`/home/web/lorikeet-logs` when run as `web`. The wrapper defaults to
+`$HOME/lorikeet-logs`, creates it, and runs the container with your host UID/GID.
+No sudo or ownership changes are needed. You can override the location with
+`LORIKEET_LOG_HOST_DIR`. Use the wrapper for Compose commands so these variables
+are always set. The container still writes to `/var/lib/lorikeet-feedback`.
 
 ```bash
-docker compose -f compose.feedback.yaml logs --tail 50 feedback
-docker compose -f compose.feedback.yaml exec feedback tail -n 5 /var/lib/lorikeet-feedback/feedback_events.jsonl
-docker compose -f compose.feedback.yaml cp feedback:/var/lib/lorikeet-feedback/feedback_summary.csv ./feedback-summary.csv
+sh feedback_website/deploy/docker.sh logs --tail 50 feedback
+ls -lh /home/web/lorikeet-logs
+tail -n 5 /home/web/lorikeet-logs/feedback_events.jsonl
+head -n 5 /home/web/lorikeet-logs/feedback_summary.csv
 ```
 
-Logs appear after the first report interaction. Container rebuilds preserve the
-volume. Do not use `down -v` or delete `lorikeet-feedback-logs` unless you intend
-to delete those logs. Back up the volume separately from Git.
+Download from your Mac (use the same SSH hostname as your normal connection):
 
-Reference: [Docker volumes](https://docs.docker.com/engine/storage/volumes/).
+```bash
+scp -r web@icvm0067:/home/web/lorikeet-logs "$HOME/Downloads/lorikeet-logs-$(date +%Y%m%d-%H%M%S)"
+```
+
+Logs appear after the first report interaction. Rebuilding or removing the
+container does not remove the host directory. The application does not expire
+interaction logs. Back up this directory separately from Git; host disk failure
+or manual deletion can still lose files. Gunicorn console logs are separate and
+rotate according to the Compose logging settings.
+
+If the previous volume-based container already has logs, migrate them **before**
+recreating it. After pulling the new code, stop the old container and copy its log
+files into an empty host log directory:
+
+```bash
+sh feedback_website/deploy/docker.sh stop feedback
+sh feedback_website/deploy/docker.sh cp feedback:/var/lib/lorikeet-feedback/. /home/web/lorikeet-logs/
+ls -lh /home/web/lorikeet-logs
+sh feedback_website/deploy/docker.sh up -d --build
+```
+
+Do not overwrite an existing host log set: keep both copies and merge events by
+`event_id` if both contain data. Keep the old `lorikeet-feedback-logs` Docker volume
+until migration is verified. If the old container has already been removed, its
+volume needs to be mounted separately to recover the files.
+
+The container disables Gunicorn's optional control socket so it can run with the
+host user's numeric UID without requiring a home directory inside the image.
+See [Gunicorn settings](https://gunicorn.org/reference/settings/).
 
 ## Alternative: run directly with Python and systemd
 

@@ -5,13 +5,18 @@ services:
     build:
       context: ./feedback_website
     restart: unless-stopped
+    user: "${LORIKEET_UID:?Run sh feedback_website/deploy/docker.sh}:${LORIKEET_GID:?Run sh feedback_website/deploy/docker.sh}"
     ports:
       - "127.0.0.1:8765:8765"
     environment:
       LORIKEET_PUBLIC_ORIGIN: https://cs-214.epfl.ch
       LORIKEET_LOG_DIR: /var/lib/lorikeet-feedback
     volumes:
-      - feedback-logs:/var/lib/lorikeet-feedback
+      - type: bind
+        source: "${LORIKEET_LOG_HOST_DIR:?Run sh feedback_website/deploy/docker.sh}"
+        target: /var/lib/lorikeet-feedback
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/', timeout=5).read()"]
       interval: 30s
@@ -23,7 +28,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  feedback-logs:
-    name: lorikeet-feedback-logs

@@ -16,4 +16,4 @@ COPY generate_feedback.py serve_feedback.py ./
 COPY generated/ ./generated/
 USER feedback
 EXPOSE 8765
-CMD ["gunicorn", "--bind", "0.0.0.0:8765", "--workers", "1", "--threads", "4", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-", "serve_feedback:build_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8765", "--workers", "1", "--threads", "4", "--timeout", "60", "--no-control-socket", "--umask", "0027", "--access-logfile", "-", "--error-logfile", "-", "serve_feedback:build_app()"]

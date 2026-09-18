@@ -4,6 +4,73 @@ The intended address is `https://cs-214.epfl.ch/lorikeet-feedback/`.
 It displays `generated/overview.html`; the links open individual feedback pages.
 The address without the trailing slash redirects to this address.
 
+## Docker deployment (recommended for icvm0067)
+
+The application runs in Docker; the server's existing Nginx handles HTTPS and
+the `/lorikeet-feedback/` route. No host Python environment or application systemd
+service is needed. Stop any manually started Gunicorn on port 8765 first.
+
+On your Mac, generate the pages, commit the deployment files, and push:
+
+```bash
+python3 feedback_website/generate_feedback.py --data .
+git add .gitignore README.md compose.feedback.yaml feedback_website grading/scripts/Check.scala
+git diff --cached --stat
+git commit -m "Add Docker deployment for feedback website"
+git push -u origin deployment
+```
+
+On the server, first check Docker access:
+
+```bash
+docker compose version
+docker info
+```
+
+If access is denied, ask the server administrator to grant the intended Docker
+access or run the deployment. For the first deployment:
+
+```bash
+cd /home/web
+git clone --branch deployment https://github.com/epfl-systemf/lorikeet.git lorikeet
+cd lorikeet
+docker compose -f compose.feedback.yaml up -d --build
+docker compose -f compose.feedback.yaml ps
+curl -I http://127.0.0.1:8765/
+```
+
+If the checkout already exists, pull the deployment branch instead of cloning.
+Have the administrator apply the Nginx instructions below. The container restarts
+after server reboot when Docker starts, unless explicitly stopped.
+
+For subsequent updates:
+
+```bash
+cd /home/web/lorikeet
+git pull --ff-only
+docker compose -f compose.feedback.yaml up -d --build
+```
+
+The image includes the generated pages, so rebuild after pulling new pages.
+Interaction logs are stored in Docker volume `lorikeet-feedback-logs`, at
+`/var/lib/lorikeet-feedback` inside the container. This replaces the host log
+directory used in the non-Docker instructions. Existing host logs are not
+automatically imported. View or export them with:
+
+```bash
+docker compose -f compose.feedback.yaml logs --tail 50 feedback
+docker compose -f compose.feedback.yaml exec feedback tail -n 5 /var/lib/lorikeet-feedback/feedback_events.jsonl
+docker compose -f compose.feedback.yaml cp feedback:/var/lib/lorikeet-feedback/feedback_summary.csv ./feedback-summary.csv
+```
+
+Logs appear after the first report interaction. Container rebuilds preserve the
+volume. Do not use `down -v` or delete `lorikeet-feedback-logs` unless you intend
+to delete those logs. Back up the volume separately from Git.
+
+Reference: [Docker volumes](https://docs.docker.com/engine/storage/volumes/).
+
+## Alternative: run directly with Python and systemd
+
 This setup uses a Linux server with systemd, Python 3.10+, and an existing Nginx
 HTTPS site. It does not require Docker or Scala on the web server. An administrator
 of cs-214.epfl.ch must add the route to that site's configuration; pushing to

@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!requirements-server.txt
+!generate_feedback.py
+!serve_feedback.py
+!generated/
+!generated/*.html

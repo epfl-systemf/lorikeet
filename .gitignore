@@ -44,3 +44,8 @@ bin/
 
 # general
 *.class
+
+# Feedback interaction logs and local Python environment
+feedback_website/logs/
+.venv/
+__pycache__/

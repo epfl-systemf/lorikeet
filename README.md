@@ -33,6 +33,9 @@ See the README in the respective subfolders for more information.
 
 ## Usage
 
+For the student feedback website, persistent interaction logs, and deployment at
+`/lorikeet-feedback/`, see [Feedback website deployment](feedback_website/DEPLOYMENT.md).
+
 This section describes how to use Lorikeet:
 
 - To use it in your own project, see the [Using the MetaRule](#using-the-metarule) section below.

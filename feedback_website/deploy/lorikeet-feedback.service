@@ -1,0 +1,25 @@
+[Unit]
+Description=Lorikeet student feedback
+After=network.target
+
+[Service]
+User=lorikeet-feedback
+Group=lorikeet-feedback
+WorkingDirectory=/srv/lorikeet/feedback_website
+Environment=LORIKEET_PUBLIC_ORIGIN=https://cs-214.epfl.ch
+Environment=LORIKEET_LOG_DIR=/var/lib/lorikeet-feedback
+Environment=PYTHONDONTWRITEBYTECODE=1
+StateDirectory=lorikeet-feedback
+StateDirectoryMode=0750
+UMask=0027
+# Keep one worker: event deduplication uses a process-local lock.
+ExecStart=/srv/lorikeet/.venv/bin/gunicorn --bind 127.0.0.1:8765 --workers 1 --threads 4 --timeout 60 --access-logfile - --error-logfile - serve_feedback:build_app()
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

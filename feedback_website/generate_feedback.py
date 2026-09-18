@@ -179,8 +179,8 @@ def resolve_rule(issue, lookup):
     return lookup.get(issue['name'], dict(
         title=issue['name'],
         location='{{file}}:{{line}}:{{column}}',
-        what_to_improve_title='What to improve', explanation='', message='{{rule_message}}',
-        suggested_rewrite_title='Suggested rewrite', rewrite_help='',
+        what_to_improve_title='{{rule_name}}', explanation='', message='{{rule_message}}',
+        suggested_rewrite_title='Suggested code', rewrite_help='',
         rewrite_code='{{rewrite}}', no_rewrite=''))
 
 
@@ -232,6 +232,7 @@ TRACKING_SCRIPT = r"""
   const prefix = 'lorikeet.feedback.' + report.report_id + '.';
   const ledger = new Map();
   const online = location.protocol === 'http:' || location.protocol === 'https:';
+  const apiBase = new URL(location.pathname.includes('/generated/') ? '../api/' : './api/', location.href);
   let token = null, sending = false;
   function persist(record){
     ledger.set(record.event.event_id, record);
@@ -248,7 +249,7 @@ TRACKING_SCRIPT = r"""
   }catch{/* Browser storage may be unavailable. */}
   async function request(url, options={}){
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),5000);
-    try{return await fetch(url,{...options,signal:controller.signal,cache:'no-store'});}
+    try{return await fetch(new URL(url.replace(/^\/api\//, ''), apiBase),{...options,signal:controller.signal,cache:'no-store'});}
     finally{clearTimeout(timeout);}
   }
   async function flush(){
@@ -315,10 +316,11 @@ def build_report(report, sample_dir, lookup, mockup):
             marker = '<div></div>'
             if matches:
                 attrs = ' class="code-line issue" tabindex="0" role="button" aria-label="' + escape('Line ' + str(number) + ': ' + ', '.join(i['feedback']['title'] for i in matches)) + '"'
+                attrs += ' aria-pressed="false" data-feedback-ids="' + escape(' '.join(i['id'] for i in matches)) + '"'
                 marker = '<span class="marker" data-target="' + matches[0]['id'] + '" aria-label="Issue"></span>'
             rows.append('<div' + attrs + '>' + marker + '<div class="ln">' + str(number) + '</div><div class="code-text">' + escape(code) + '</div></div>')
         heading = 'Code' if len(paths) == 1 else escape(path)
-        panels.append('<section class="panel"><div class="panel-title">' + heading + '</div><div class="code">' + ''.join(rows) + '</div><div class="hint">Click an issue line to view feedback. Code excerpts use original line numbers.</div></section>')
+        panels.append('<section class="panel"><div class="panel-title">' + heading + '</div><div class="code">' + ''.join(rows) + '</div><div class="hint">Line numbers match your original code.</div></section>')
     rating_match = re.search(r'<div class="rating">.*?</div>', mockup, re.S)
     if rating_match is None:
         raise ValueError('The mockup must contain its rating controls')
@@ -354,13 +356,12 @@ def build_report(report, sample_dir, lookup, mockup):
         if len(siblings) > 1:
             body += '<div>' + ''.join('<button class="rate" data-feedback-target="' + i['id'] + '">' + escape(i['feedback']['title']) + '</button>' for i in siblings) + '</div>'
         body += rating_match.group()
-        location = rule['location']
-        cards.append('<section class="feedback" id="' + issue['id'] + '"><div class="feedback-head"><div><div class="feedback-title">' + escape(rule['title']) + '</div><div class="location">' + escape(location) + '</div></div></div><div class="feedback-body">' + body + '</div></section>')
+        cards.append('<section class="feedback" id="' + issue['id'] + '"><div class="feedback-body">' + body + '</div></section>')
     title = submission + ' · ' + run
-    file_label = paths[0] if len(paths) == 1 else title
+    header_hint = '<div class="code-guide">Click a line to see its suggestions.</div>' if issues else ''
     left = panels[0] if len(panels) == 1 else '<div>' + ''.join(panels) + '</div>'
-    empty = 'Click an issue line to view feedback.' if issues else 'No issues are listed in this report.'
-    main = '<main class="shell"><div class="header"><h1>Feedback</h1><div class="file">' + escape(file_label) + '</div></div><div class="layout">' + left + '<aside class="panel feedback-panel"><div class="panel-title">Rewrites</div><div class="empty" id="empty">' + empty + '</div>' + ''.join(cards) + '</aside></div></main>'
+    empty = 'Click a line to see its suggestions.' if issues else 'There are no suggestions for this submission.'
+    main = '<main class="shell"><div class="header"><h1>Feedback</h1>' + header_hint + '</div><div class="layout">' + left + '<aside class="panel feedback-panel"><div class="panel-title">Suggestions</div><div class="empty" id="empty">' + empty + '</div>' + ''.join(cards) + '</aside></div></main>'
     relative = report.relative_to(sample_dir).as_posix()
     filename = re.sub(r'[^A-Za-z0-9._-]', '-', run + '-' + submission) + '-' + hashlib.sha256(relative.encode()).hexdigest()[:8] + '.html'
     metadata = dict(report_id=filename.removesuffix('.html'), submission=submission, run=run,
@@ -722,7 +723,7 @@ def make_server(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--data', type=Path, default=HERE / 'sample_data')
+    parser.add_argument('--data', type=Path, default=HERE.parent)
     parser.add_argument('--rules', type=Path, default=HERE / 'rule_templates.json')
     parser.add_argument('--mockup', type=Path, default=HERE / 'feedback_mockup.html')
     parser.add_argument('--output', type=Path, default=HERE / 'generated')

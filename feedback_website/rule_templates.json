@@ -2,10 +2,10 @@
   "Infix +": {
     "title": "Infix +",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches an arithmetic operator written as a method call. Use the infix form shown in the suggested rewrite.",
+    "what_to_improve_title": "Infix +",
+    "explanation": "You can write this arithmetic operation with the operator between its values. The suggested version shows this form.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -13,10 +13,10 @@
   "Infix -": {
     "title": "Infix -",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches an arithmetic operator written as a method call. Use the infix form shown in the suggested rewrite.",
+    "what_to_improve_title": "Infix -",
+    "explanation": "You can write this arithmetic operation with the operator between its values. The suggested version shows this form.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -24,10 +24,10 @@
   "Infix *": {
     "title": "Infix *",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches an arithmetic operator written as a method call. Use the infix form shown in the suggested rewrite.",
+    "what_to_improve_title": "Infix *",
+    "explanation": "You can write this arithmetic operation with the operator between its values. The suggested version shows this form.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -35,10 +35,10 @@
   "Infix /": {
     "title": "Infix /",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches an arithmetic operator written as a method call. Use the infix form shown in the suggested rewrite.",
+    "what_to_improve_title": "Infix /",
+    "explanation": "You can write this arithmetic operation with the operator between its values. The suggested version shows this form.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -46,10 +46,10 @@
   "If Simplification": {
     "title": "If Simplification",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This if expression can be simplified using Boolean operators. The rule below shows the general transformation.",
+    "what_to_improve_title": "If Simplification",
+    "explanation": "You can express this condition more simply with Boolean operators.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -57,10 +57,10 @@
   "Inline Helper Function": {
     "title": "Inline Helper Function",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "The outer function defines a local helper and immediately calls it. Move the helper body into the outer function using the rewrite’s parameter and recursive-call substitutions.",
+    "what_to_improve_title": "Inline Helper Function",
+    "explanation": "Your function defines a helper and immediately calls it. Try moving the helper body into the outer function. Check the parameter names and recursive calls as you make this change.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -68,10 +68,10 @@
   "Var Usage": {
     "title": "Var Usage",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "Do not use vars - use vals and functional programming instead",
+    "what_to_improve_title": "Var Usage",
+    "explanation": "Try using val to keep values unchanged. If you need to update a value repeatedly, consider a collection operation or recursion to compute the result.",
     "message": "",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -79,10 +79,10 @@
   "Infix": {
     "title": "Infix",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches an arithmetic operator written as a method call. Use the infix form shown in the suggested rewrite.",
+    "what_to_improve_title": "Infix",
+    "explanation": "You can write this arithmetic operation with the operator between its values. The suggested version shows this form.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -90,10 +90,10 @@
   "While Loop": {
     "title": "While Loop",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This code uses a while loop. Choose a collection operation such as map, filter or fold, or use recursion when it fits the computation. Preserve the loop’s stopping condition and effects.",
+    "what_to_improve_title": "While Loop",
+    "explanation": "Try expressing this loop with map, filter, fold, or recursion. Choose the approach that fits the result you want, and keep the same stopping condition and any other behavior your code relies on.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -101,10 +101,10 @@
   "For Loop": {
     "title": "For Loop",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches a for-do loop, which executes a body for its elements. Choose a collection operation or recursion that expresses the intended result. Review any effects in the loop body.",
+    "what_to_improve_title": "For Loop",
+    "explanation": "Consider using a collection operation or recursion to express the result of this loop. Check that the new version keeps any other behavior your code relies on.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -112,10 +112,10 @@
   "Predefined Constants": {
     "title": "Predefined Constants",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This vector literal matches a predefined Vector2 constant. Use the named constant to express the direction or zero vector more clearly.",
+    "what_to_improve_title": "Predefined Constants",
+    "explanation": "You can use a predefined Vector2 constant here. Its name makes the direction or zero vector easier to recognize.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -123,10 +123,10 @@
   "Vector2 Multiplied by Zero": {
     "title": "Vector2 Multiplied by Zero",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "Vector2 Multiplied by Zero",
     "explanation": "This rule matches a Vector2 expression multiplied by zero, on either side. Review the rewrite in the assignment’s vector model. Replacing the expression also removes evaluation of the vector operand; do not assume this is appropriate for effectful operands or every numeric model.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -134,10 +134,10 @@
   "BoidCons Use": {
     "title": "BoidCons Use",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This code constructs a BoidCons node directly. Consider map, filter or fold according to what the surrounding computation is trying to do.",
+    "what_to_improve_title": "BoidCons Use",
+    "explanation": "You are building a list with BoidCons here. Consider whether map, filter, or fold could express the result more clearly.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -145,10 +145,10 @@
   "BoidNil Use": {
     "title": "BoidNil Use",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This code constructs BoidNil directly. Review the surrounding list computation and express it with an appropriate collection operation.",
+    "what_to_improve_title": "BoidNil Use",
+    "explanation": "Consider whether a collection operation could handle the empty list case as part of the surrounding computation.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -156,10 +156,10 @@
   "Placeholder Syntax (single param)": {
     "title": "Placeholder Syntax (single param)",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This configured rule rewrites a single-parameter anonymous function by substituting its parameter with _. Check parameter usage and scope before accepting the rewrite. Multiple uses, unused parameters or nested expressions may not produce an equivalent placeholder function.",
+    "what_to_improve_title": "Placeholder Syntax (single param)",
+    "explanation": "You may be able to use _ in place of the parameter name. Check that the parameter is used once and that _ still refers to the same input, especially inside nested expressions.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -167,10 +167,10 @@
   "Placeholder Syntax (two params)": {
     "title": "Placeholder Syntax (two params)",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This configured rule substitutes the two anonymous-function parameters with underscores. Check that placeholder order, number of uses and inferred types preserve the original function. Repeated or reversed parameter references need particular review.",
+    "what_to_improve_title": "Placeholder Syntax (two params)",
+    "explanation": "You may be able to use underscores for the two parameters. Check that each parameter is used once, in the original order, and that the types still fit.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -178,10 +178,10 @@
   "Expand Map to Match": {
     "title": "Expand Map to Match",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This teaching rule expands a List[Int] map inside a function into Nil and head :: tail cases. Use the suggested rewrite to return Nil for an empty list and transform the head before recursing on the tail. This is a teaching transformation; explicit recursion can change stack usage.",
+    "what_to_improve_title": "Expand Map to Match",
+    "explanation": "To practice recursion, try writing this map with an empty list case and a head :: tail case. Return Nil for the empty list, then transform the head and recurse on the tail. This version can use more stack space.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -189,10 +189,10 @@
   "Simplify Match": {
     "title": "Simplify Match",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "The Some case binds a variable that the rule verifies is unused in its body. Replace the unused binding with _ while keeping the case body and fallback.",
+    "what_to_improve_title": "Simplify Match",
+    "explanation": "You do not use the value named in this Some case. You can replace its name with _ and keep the rest of the match unchanged.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -200,10 +200,10 @@
   "Simplify Match with If Guard": {
     "title": "Simplify Match with If Guard",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "The Some case binds a variable that the rule verifies is unused in both its guard and body. Replace the unused binding with _ and keep the guard, case body and fallback.",
+    "what_to_improve_title": "Simplify Match with If Guard",
+    "explanation": "You do not use the value named in this Some case, either in the condition or in the body. You can replace its name with _ and keep the condition and remaining cases.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -211,10 +211,10 @@
   "Int Ascription Eq": {
     "title": "Int Ascription Eq",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches equality between expressions with explicit Int ascriptions. Review the resulting operand types and equality behavior before using the expression without the explicit ascriptions.",
+    "what_to_improve_title": "Int Ascription Eq",
+    "explanation": "You may be able to leave out the explicit Int types in this comparison. Check that Scala still infers the types you intend and that the comparison behaves the same way.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -222,10 +222,10 @@
   "List Ascription Eq": {
     "title": "List Ascription Eq",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches equality between two expressions ascribed as lists of the same captured element type. Review the resulting types before accepting removal of the explicit list ascriptions.",
+    "what_to_improve_title": "List Ascription Eq",
+    "explanation": "You may be able to leave out the explicit List types in this comparison. Check that Scala still infers the list and element types you intend.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -233,10 +233,10 @@
   "Implicit to Using": {
     "title": "Implicit to Using",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This method declares an implicit parameter list. Change implicit to using as shown, preserving the parameters, result type and body. This template targets Scala 3 syntax.",
+    "what_to_improve_title": "Implicit to Using",
+    "explanation": "In Scala 3, you can write this parameter list with using. Keep the parameter names, types, and function body the same.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -244,10 +244,10 @@
   "Fully Qualified None": {
     "title": "Fully Qualified None",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "Fully Qualified None",
     "explanation": "This semantic matching example identifies scala.None in its configured package. Review the rewrite’s replacement with Option.empty and its inferred type in context.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -255,10 +255,10 @@
   "Fully Qualified List Apply": {
     "title": "Fully Qualified List Apply",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "Fully Qualified List Apply",
     "explanation": "This example matches the specific List(1, 2) construction by its fully qualified symbol. Use Vector(1, 2) only where changing the concrete collection type fits the exercise. This is not a general recommendation to replace every List.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -266,10 +266,10 @@
   "Fully Qualified String": {
     "title": "Fully Qualified String",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "Fully Qualified String",
     "explanation": "This example matches java.lang.String within its configured package. The configured replacement is also java.lang.String. A match may produce no textual change.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -277,10 +277,10 @@
   "Fully Qualified Option": {
     "title": "Fully Qualified Option",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "Fully Qualified Option",
     "explanation": "This example matches scala.Option within its configured package. The configured replacement is also scala.Option. A match may produce no textual change.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -288,10 +288,10 @@
   "BracketMigration": {
     "title": "BracketMigration",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "BracketMigration",
     "explanation": "This rule matches Stream.bracket with acquire, use and release argument groups. Apply the rewrite’s bracket(acquire)(release).flatMap(use) form only for the API version targeted by this migration.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -299,10 +299,10 @@
   "DebounceMigration": {
     "title": "DebounceMigration",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "DebounceMigration",
     "explanation": "This rule matches a stream passed through a Scheduler debounce operation. Use src.debounce(d) for the API version targeted by this migration and check the surrounding timing context.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -310,10 +310,10 @@
   "SchedulerToTimer": {
     "title": "SchedulerToTimer",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "SchedulerToTimer",
     "explanation": "This rule matches a value declaration ascribed as fs2.Scheduler. The configured rewrite hardcodes the name scheduler and type Timer[F]. Review references, the type parameter F and imports in the surrounding code.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -321,10 +321,10 @@
   "SemaphoreMigration": {
     "title": "SemaphoreMigration",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "SemaphoreMigration",
     "explanation": "This rule matches decrement on a Semaphore value. Use acquire for the semaphore API version targeted by this migration.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -332,10 +332,10 @@
   "SemaphoreImport": {
     "title": "SemaphoreImport",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
+    "what_to_improve_title": "SemaphoreImport",
     "explanation": "This rule matches an import of fs2.async.mutable.Semaphore. Use the target import only with the dependency version expected by this migration, then check the semaphore call sites.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""
@@ -343,10 +343,10 @@
   "Remove Debug Prints": {
     "title": "Remove Debug Prints",
     "location": "{{file}}:{{line}}:{{column}}",
-    "what_to_improve_title": "What to improve",
-    "explanation": "This rule matches a println statement surrounded by other statements in a block. Confirm the output is debug-only. Removing println also removes evaluation of its argument, which may itself have effects.",
+    "what_to_improve_title": "Remove Debug Prints",
+    "explanation": "If this println was only for debugging, you can remove it. First check that computing its argument does not perform work your program still needs.",
     "message": "{{rule_message}}",
-    "suggested_rewrite_title": "Suggested rewrite",
+    "suggested_rewrite_title": "Suggested code",
     "rewrite_help": "",
     "rewrite_code": "{{rewrite}}",
     "no_rewrite": ""

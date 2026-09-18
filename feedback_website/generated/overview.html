@@ -79,6 +79,27 @@ body{
   background:var(--issue);
   cursor:pointer;
 }
+.code-line.issue.selected{
+  background:#fed7aa;
+  box-shadow:inset 0 0 0 2px #ea580c;
+}
+.code-line.issue:hover:not(.selected){
+  background:#ffedd5;
+  box-shadow:inset 0 0 0 1px var(--issue-border);
+}
+.code-line.issue:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:-2px;
+}
+.code-guide{
+  color:#c2410c;
+  font-size:12px;
+  font-weight:400;
+}
+.code-line.issue.selected .ln{
+  color:#9a3412;
+  font-weight:700;
+}
 .ln{
   color:#9ca3af;
   text-align:right;
@@ -146,12 +167,17 @@ body{
   justify-content:space-between;
   align-items:flex-start;
   gap:14px;
-  padding:17px 18px 14px;
-  border-bottom:1px solid var(--line);
+  padding:18px 18px 0;
 }
 .feedback-title{
+  display:inline-block;
+  padding:6px 10px;
+  border-radius:8px;
+  background:var(--accent-soft);
+  color:var(--accent);
   font-weight:750;
-  font-size:16px;
+  font-size:14px;
+  line-height:1.4;
 }
 .location{
   margin-top:5px;
@@ -258,7 +284,7 @@ pre{
 </style>
 <style>table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:14px 16px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}tbody tr:last-child td{border-bottom:0}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}</style></head>
 <body>
-<main class="shell"><div class="header"><h1>Overview</h1></div><section class="panel" style="overflow:auto"><table><thead><tr><th>Submission</th><th>Run</th><th>Issues</th><th>Rules</th></tr></thead><tbody><tr><td><a href="2026.08.05_14.55.17-lint-0-3c94955d.html">lint-0</a></td><td>2026.08.05_14.55.17</td><td>2</td><td>If Simplification, Var Usage</td></tr><tr><td><a href="2026.08.25_17.32.23-lint-0-5e3d26d9.html">lint-0</a></td><td>2026.08.25_17.32.23</td><td>2</td><td>If Simplification, Var Usage</td></tr></tbody></table></section></main>
+<main class="shell"><div class="header"><h1>Overview</h1></div><section class="panel" style="overflow:auto"><table><thead><tr><th>Submission</th><th>Run</th><th>Issues</th><th>Rules</th></tr></thead><tbody><tr><td><a href="2026.09.18_13.35.55-lint-0-7d98c199.html">lint-0</a></td><td>2026.09.18_13.35.55</td><td>2</td><td>If Simplification, Var Usage</td></tr></tbody></table></section></main>
 
 
 </body>

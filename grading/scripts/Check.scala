@@ -33,6 +33,7 @@ object CheckTool:
   case class MissingFiles(studentId: String, attempt: Int, files: Seq[String])
       extends CheckResult
   case class CompileError(studentId: String, attempt: Int) extends CheckResult
+  case class CheckError(studentId: String, attempt: Int) extends CheckResult
   case class IssuesFound(
       studentId: String,
       attempt: Int,
@@ -115,6 +116,12 @@ object CheckTool:
       // Linting check
       val (lintCode, lintOut) = runScalafix(cfg.labDir, cfg)
       val rules = processLintReport(lintOut, lintReport, cfg.labDir)
+      // Lint findings can return a nonzero status; a failure without findings
+      // is an execution error, not a successful check.
+      if (lintCode != 0 && rules.isEmpty) {
+        System.err.println(lintOut)
+        return logAndReturn(CheckError(studentId, attempt))
+      }
 
       // Apply fixes, reformat
       formatCode(cfg.labDir)
@@ -165,7 +172,11 @@ object CheckTool:
       (e: String) => output.append(e).append('\n')
     )
 
-    val fileArgs = cfg.targetFiles.map(f => s"--files=$f").mkString(" ")
+    val fileArgs = cfg.targetFiles.map { file =>
+      val relative = labDir.relativize(file).toString
+        .replace("\\", "\\\\").replace("\"", "\\\"")
+      s"--files=\"$relative\""
+    }.mkString(" ")
     val command = Seq(
       "sbt",
       "--client",
@@ -333,6 +344,8 @@ object CheckTool:
         s"   -> ❓ MISSING FILES: $studentId / $attempt -> ${files.mkString(", ")}\n"
       case CompileError(studentId, attempt) =>
         s"   -> ❌ ERROR:   $studentId / $attempt\n"
+      case CheckError(studentId, attempt) =>
+        s"   -> ❌ CHECK ERROR: $studentId / $attempt\n"
       case IssuesFound(studentId, attempt, issues) =>
         s"   -> ⚠️  ISSUES:  $studentId / $attempt -> ${issues
             .map { case (rule, count) => s"$rule ($count)" }
@@ -473,6 +486,10 @@ object CheckTool:
       case IssuesFound(_, _, _) => true
       case _                    => false
     }
+    val checkErrors = results.count {
+      case CheckError(_, _) => true
+      case _               => false
+    }
 
     val globalMatches = results
       .collect { case IssuesFound(_, _, issues) =>
@@ -496,6 +513,7 @@ object CheckTool:
     val summary = s"""Total submissions: $totalSubmissions
 Submissions with missing file: $missingFiles
 Submissions with compile errors: $compileErrors
+Submissions with check errors: $checkErrors
 Submissions failing check: $ruleMatches
 """
     println(summary)

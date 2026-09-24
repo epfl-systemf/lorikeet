@@ -1,12 +1,12 @@
 //> using scala 3.7.4
 
 // --- CONFIGURATION ---
-val LAB_DIR_NAME = "find"
-val SUBMISSIONS_DIR_NAME = "student-lab-submissions/2024/find/submissions"
+val SCAFFOLD_DIR = "scaffold_projects/find"
+val SUBMISSIONS_DIR = "student-lab-submissions/2024/find/submissions"
 val TARGET_FILES = Seq("src/main/scala/find/find.scala")
 
-// val LAB_DIR_NAME = "boids"
-// val SUBMISSIONS_DIR_NAME = "student-lab-submissions/2024/boids/submissions"
+// val SCAFFOLD_DIR = "scaffold_projects/boids"
+// val SUBMISSIONS_DIR = "student-lab-submissions/2024/boids/submissions"
 // val TARGET_FILES = Seq("src/main/scala/boids/BoidLogic.scala")
 
 import java.io.File
@@ -96,6 +96,7 @@ object CheckTool:
     clearDirectory(historyTemp)
     try {
       contexts.foreach { ctx =>
+        Files.createDirectories(ctx.labPath.getParent)
         Files.copy(
           ctx.subPath,
           ctx.labPath,
@@ -472,14 +473,14 @@ object CheckTool:
     val timestamp = LocalDateTime.now().format(formatter)
 
     val cfg = Config(
-      labDir = ROOT.resolve(LAB_DIR_NAME),
-      submissionsDir = ROOT.resolve(SUBMISSIONS_DIR_NAME),
+      labDir = ROOT.resolve(SCAFFOLD_DIR),
+      submissionsDir = ROOT.resolve(SUBMISSIONS_DIR),
       diffDir = outputRoot.resolve(s"grading_diffs_$timestamp"),
       historyDir = outputRoot.resolve(s"grading_histories_$timestamp"),
       originalDir = outputRoot.resolve(s"grading_originals_$timestamp"),
       lintDir = outputRoot.resolve(s"grading_reports_$timestamp"),
       tmpDir = outputRoot.resolve(".tmp"),
-      targetFiles = TARGET_FILES.map(f => ROOT.resolve(LAB_DIR_NAME).resolve(f))
+      targetFiles = TARGET_FILES.map(f => ROOT.resolve(SCAFFOLD_DIR).resolve(f))
     )
 
     List(

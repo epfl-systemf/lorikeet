@@ -23,6 +23,7 @@ This repo is structured as follows:
 ├── examples/                 # Example usage
 ├── extensions/               # VSCode highlighting extension for `.lorikeet.conf` files
 ├── grading/                  # Student grading script & rules
+├── scaffold_projects/        # Minimal projects used to compile submissions
 ├── scalafix/                 # Core logic of Lorikeet
 ├── server/                   # Webapp backend
 └── webapp/                   # Webapp frontend
@@ -67,16 +68,44 @@ During rule development, set `scalafixCaching := false` so `.lorikeet.conf` edit
 
 ### Generate feedback for many submissions
 
-Use [Check.scala](grading/scripts/Check.scala) with a configured scaffold project and submissions arranged as `submissions/<student-id>/<attempt>/<target-file>.scala`.
+Use [Check.scala](grading/scripts/Check.scala) to place each submission in a clean sbt project, compile it, run Lorikeet, and collect its feedback.
 
-1. Configure `LAB_DIR_NAME`, `SUBMISSIONS_DIR_NAME`, and `TARGET_FILES` at the top of `Check.scala`. The scaffold must contain `.lorikeet.conf`, `.scalafmt.conf`, and the sbt setup above.
-2. Run the batch check from the repository root:
+1. Create a minimal scaffold (the repository includes `scaffold_projects/find`):
+
+```tree
+scaffold_projects/find/
+├── .lorikeet.conf
+├── .scalafmt.conf
+├── build.sbt
+└── project/
+    ├── build.properties
+    └── plugins.sbt
+```
+
+Use the sbt/Scalafix setup above, point `build.sbt` at the locally published Lorikeet version, and put assignment-specific rules in `.lorikeet.conf`. The batch script creates the target source directories and removes each copied submission after checking it.
+
+2. Arrange submissions by student and numeric attempt. The highest attempt is checked, and each submitted filename must match the basename of its configured target:
+
+```tree
+student-lab-submissions/2024/find/submissions/
+├── alice/
+│   ├── 0/find.scala
+│   └── 1/find.scala
+└── bob/
+    └── 0/find.scala
+```
+
+3. Set `SCAFFOLD_DIR`, `SUBMISSIONS_DIR`, and `TARGET_FILES` at the top of `Check.scala`. Paths are relative to the repository root; `TARGET_FILES` are paths inside the scaffold.
+
+4. Run the batch check from the repository root:
 
 ```bash
 scala-cli run grading/scripts/Check.scala
 ```
 
-3. Generate and serve the offline feedback site from the timestamped grading outputs:
+Submissions that do not compile are reported and skipped by Lorikeet.
+
+5. Generate and serve the offline feedback site from the timestamped grading outputs:
 
 ```bash
 python feedback_website/generate_feedback.py \

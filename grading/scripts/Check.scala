@@ -389,7 +389,7 @@ object CheckTool:
       )
     )
 
-    val diffOutput = output.toString().trim
+    val diffOutput = output.toString()
 
     if (diffOutput.nonEmpty) {
       Files.write(

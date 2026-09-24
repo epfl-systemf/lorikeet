@@ -8,6 +8,18 @@ import generate_feedback
 
 
 class TimelineTest(unittest.TestCase):
+    def test_trimmed_blank_diff_context_is_recovered(self):
+        original, blocks = generate_feedback.parse_diff(
+            "--- before\n+++ after\n@@ -1,2 +1,2 @@\n-old\n+new"
+        )
+
+        self.assertEqual(original, {1: "old", 2: ""})
+        self.assertEqual(blocks, [{"start": 1, "before": ["old"], "after": ["new"]}])
+        with self.assertRaisesRegex(ValueError, "Truncated diff hunk"):
+            generate_feedback.parse_diff(
+                "--- before\n+++ after\n@@ -1,2 +1,2 @@\n-old\n+new\n"
+            )
+
     def test_observations_follow_rewrites_and_duplicates_are_removed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

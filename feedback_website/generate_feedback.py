@@ -133,6 +133,13 @@ def parse_diff(text):
         if old_left < 0 or new_left < 0:
             raise ValueError("Diff hunk line counts do not match")
     flush()
+    # Check.scala historically trimmed trailing blank context lines from diffs.
+    while not text.endswith("\n") and old_left == new_left and old_left > 0:
+        original[old] = ""
+        old += 1
+        new += 1
+        old_left -= 1
+        new_left -= 1
     if old_left or new_left:
         raise ValueError("Truncated diff hunk")
     return original, blocks

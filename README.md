@@ -80,10 +80,10 @@ scala-cli run grading/scripts/Check.scala
 
 ```bash
 python feedback_website/generate_feedback.py \
-  --data . --include-scalafmt --serve
+  --include-scalafmt --serve
 ```
 
-`Check.scala` records original sources, per-rewrite histories, lint reports, and final diffs. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
+`Check.scala` writes original sources, per-rewrite histories, lint reports, and final diffs under `grading/output/`. The feedback generator reads that directory by default. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
 
 ### Review generated feedback
 

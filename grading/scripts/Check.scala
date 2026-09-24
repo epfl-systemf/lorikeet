@@ -467,17 +467,18 @@ object CheckTool:
   def run(): Unit = {
 
     val ROOT: Path = Paths.get(".").toAbsolutePath.normalize()
+    val outputRoot = ROOT.resolve("grading/output")
     val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd_HH.mm.ss")
     val timestamp = LocalDateTime.now().format(formatter)
 
     val cfg = Config(
       labDir = ROOT.resolve(LAB_DIR_NAME),
       submissionsDir = ROOT.resolve(SUBMISSIONS_DIR_NAME),
-      diffDir = ROOT.resolve(s"grading_diffs_$timestamp"),
-      historyDir = ROOT.resolve(s"grading_histories_$timestamp"),
-      originalDir = ROOT.resolve(s"grading_originals_$timestamp"),
-      lintDir = ROOT.resolve(s"grading_reports_$timestamp"),
-      tmpDir = ROOT.resolve("tmp"),
+      diffDir = outputRoot.resolve(s"grading_diffs_$timestamp"),
+      historyDir = outputRoot.resolve(s"grading_histories_$timestamp"),
+      originalDir = outputRoot.resolve(s"grading_originals_$timestamp"),
+      lintDir = outputRoot.resolve(s"grading_reports_$timestamp"),
+      tmpDir = outputRoot.resolve(".tmp"),
       targetFiles = TARGET_FILES.map(f => ROOT.resolve(LAB_DIR_NAME).resolve(f))
     )
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate offline feedback timelines from Lorikeet histories, lints, and diffs.
 
-Python 3.9+, standard library only. Paths default to this script's directory.
+Python 3.9+, standard library only. Runtime data defaults to grading/output.
 """
 import argparse
 import hashlib
@@ -826,12 +826,13 @@ def make_server(args):
 
 
 def main():
+    grading_output = HERE.parent / 'grading' / 'output'
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--data', type=Path, default=HERE / 'sample_data')
+    parser.add_argument('--data', type=Path, default=grading_output)
     parser.add_argument('--rules', type=Path, default=HERE / 'rule_templates.json')
     parser.add_argument('--mockup', type=Path, default=HERE / 'feedback_mockup.html')
-    parser.add_argument('--output', type=Path, default=HERE / 'generated')
-    parser.add_argument('--logs', type=Path, default=HERE / 'logs')
+    parser.add_argument('--output', type=Path, default=grading_output / 'feedback')
+    parser.add_argument('--logs', type=Path, default=grading_output / 'feedback_logs')
     parser.add_argument('--include-scalafmt', action='store_true',
                         help='Show formatting saved by Check.scala as the first timeline rewrite')
     parser.add_argument('--serve', action='store_true', help='Start the local template editor')

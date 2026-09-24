@@ -4,7 +4,7 @@ Lorikeet is a Scalafix-based code quality feedback tool that lets you define cus
 
 Writing rules requires no knowledge of Scala's AST or the Scalafix API, and allows you to express complex patterns and rewrites with a simple and intuitive syntax.
 
-The included script [Check.scala](scripts/Check.scala) allows easily running a set of custom rules on a large number of student submissions, and provides detailed feedback and statistics on the results.
+The included [Check.scala](grading/scripts/Check.scala) script runs custom rules over many submissions and produces feedback and summary statistics.
 
 ## ️Supported Scala Versions
 
@@ -24,136 +24,70 @@ This repo is structured as follows:
 ├── extensions/               # VSCode highlighting extension for `.lorikeet.conf` files
 ├── grading/                  # Student grading script & rules
 ├── scalafix/                 # Core logic of Lorikeet
-├── scripts/                  # Student grading script
 ├── server/                   # Webapp backend
 └── webapp/                   # Webapp frontend
 ```
 
 See the README in the respective subfolders for more information.
 
-## Usage
+## Local usage
 
-This section describes how to use Lorikeet:
+### Run Lorikeet on one project
 
-- To use it in your own project, see the [Using the MetaRule](#using-the-metarule) section below.
-- To grade student submissions, see the [Running a Check on Student Submissions](#running-a-check-on-student-submissions) section below.
+1. Publish Lorikeet locally. Use the version printed by sbt in the target project.
 
-For more details on how to write custom rules and the syntax of query patterns and rewrite templates, see the [Guide](GUIDE.md).
+```bash
+cd scalafix
+sbt "rules3/publishLocal"
+```
 
-### Using the MetaRule
-
-1. Publish the rule locally using the command above, or use the published version if available.
-2. Add sbt-scalafix and sbt-scalafmt to your `project/plugins.sbt` file:
+2. Add Scalafix and Scalafmt to `project/plugins.sbt`:
 
 ```scala
 addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.4")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
 ```
 
-3. Add the rule as a dependency and semanticdb support to your `build.sbt` file:
+3. Enable SemanticDB and add Lorikeet to `build.sbt`:
 
 ```scala
 semanticdbEnabled := true
 semanticdbVersion := scalafixSemanticdb.revision
 
-scalafixDependencies += "ch.epfl.systemf" % "lorikeet_3" % "0.1.0"
+scalafixDependencies += "ch.epfl.systemf" % "lorikeet_3" % "<version>"
 ```
 
-4. Create a `.lorikeet.conf` file in the root of your project with your custom rule configuration (see the [Guide](GUIDE.md) for syntax and examples).
-
-5. Run Scalafix on your project, specifying the rule name:
+4. Add `.lorikeet.conf` ([rule syntax](GUIDE.md)), then run:
 
 ```bash
 sbt "scalafix MetaRule"
 ```
 
-6. Optionally, if you need to test and modify your rules, disable scalafix caching in your `build.sbt` file:
+During rule development, set `scalafixCaching := false` so `.lorikeet.conf` edits are not hidden by sbt caching.
 
-```scala
-scalafixCaching := false
+### Generate feedback for many submissions
+
+Use [Check.scala](grading/scripts/Check.scala) with a configured scaffold project and submissions arranged as `submissions/<student-id>/<attempt>/<target-file>.scala`.
+
+1. Configure `LAB_DIR_NAME`, `SUBMISSIONS_DIR_NAME`, and `TARGET_FILES` at the top of `Check.scala`. The scaffold must contain `.lorikeet.conf`, `.scalafmt.conf`, and the sbt setup above.
+2. Run the batch check from the repository root:
+
+```bash
+scala-cli run grading/scripts/Check.scala
 ```
 
-This is because sbt task caching will avoid rerunning a task that has already been run with the same arguments and scala input files, but changes to the custom rules configuration file `.lorikeet.conf` are not considered and would not trigger a re-run of scalafix.
+3. Generate and serve the offline feedback site from the timestamped grading outputs:
 
-### Running a Check on Student Submissions
-
-See script [Check.scala](scripts/Check.scala).
-
-This script expects a submission directory with the following structure:
-
-```tree
-submission/
-├── SCIPER
-│   └── 0
-│       └── assignment.scala
-|   └── 1
-│       └── assignment.scala
-|   └── ...
-├── SCIPER
-│   └── 0
-│       └── assignment.scala
-|   └── ...
-└── ...
+```bash
+python feedback_website/generate_feedback.py \
+  --data . --include-scalafmt --serve
 ```
 
-The script also expects a `scaffold` directory containing the lab sbt project that has been
-configured to use the custom rules, as described above.
+`Check.scala` records original sources, per-rewrite histories, lint reports, and final diffs. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
 
-To use the `Check.scala` script, you also need to provide a `.scalafmt.conf` file in the root of your scaffold project. Scalafmt will be run before and after applying the rewrites to ensure proper formatting. A minimal configuration could be:
+### Review generated feedback
 
-```hocon
-version = 3.9.9
-runner.dialect = scala3
-```
-
-The script will replace the `assignment.scala` file in the scaffold project with the ones from the submission, then compile and run scalafix check on it, collecting the results in a logs file.
-
-Note that submissions that do not compile will be reported as such but will not be checked with scalafix. This means it may be a good idea to remove `-Xfatal-warnings` or other such flags
-from the scaffold project.
-
-The script output includes original sources, final diffs, exact per-rewrite JSON histories, individual feedback, and a summary of how many submissions matched each rule. The original sources let the feedback website optionally show the initial Scalafmt change.
-
-Use `python feedback_website/generate_feedback.py --data <grading-output-directory> --include-scalafmt` to include that formatting change as the first timeline rewrite.
-
-The console output looks something like this:
-
-```text
-Diffs directory: ~evaluating/grading_diffs_2026.01.01_14.26.00
-Rewrite histories directory: ~evaluating/grading_histories_2026.01.01_14.26.00
-Original sources directory: ~evaluating/grading_originals_2026.01.01_14.26.00
-Lint reports directory: ~/evaluating/grading_reports_2026.01.01_14.26.00
-
-Starting grading process...
-
--> ⚠️  ISSUES:  359355 / 0 -> Var Usage (1), If Simplification (12)
--> ⚠️  ISSUES:  361678 / 0 -> If Simplification (12)
--> ⚠️  ISSUES:  356669 / 0 -> Var Usage (5)
--> ⚠️  ISSUES:  380092 / 0 -> If Simplification (5)
--> ✅ SUCCESS: 377073 / 0
--> ⚠️  ISSUES:  378842 / 2 -> Var Usage (4), If Simplification (2)
--> ⚠️  ISSUES:  372197 / 0 -> Var Usage (3), If Simplification (4)
--> ⚠️  ISSUES:  344921 / 0 -> If Simplification (5)
--> ⚠️  ISSUES:  363557 / 0 -> Var Usage (12)
-.....
-
---- SUMMARY ---
-Total submissions: 421
-Submissions with missing file: 0
-Submissions with compile errors: 1
-Submissions failing check: 378
-
---- STATISTICS ---
-Submissions with Matches:
-  If Simplification: 267
-  Var Usage: 135
-Total Rule Matches:
-  If Simplification: 2609
-  Var Usage: 752
-
-Grading complete.
-```
-
-See the configuration options at the top of the script.
+Open `http://127.0.0.1:8765/generated/overview.html`, select a submission, and use Next/Back to inspect each rewrite and final observation. Review a representative sample before distribution—especially broad patterns and formatting-only changes—and update `.lorikeet.conf` rather than editing generated HTML. The editor at `http://127.0.0.1:8765/` can refine feedback text and regenerate the pages.
 
 ## Running the Lorikeet Webapp
 

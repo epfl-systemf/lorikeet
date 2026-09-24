@@ -2,7 +2,7 @@
 
 // --- CONFIGURATION ---
 val SCAFFOLD_DIR = "scaffold_projects/find"
-val SUBMISSIONS_DIR = "student-lab-submissions/2024/find/submissions"
+val SUBMISSIONS_DIR = "student-lab-submissions/2026/find"
 val TARGET_FILES = Seq("src/main/scala/find/find.scala")
 
 // val SCAFFOLD_DIR = "scaffold_projects/boids"
@@ -29,16 +29,14 @@ object CheckTool:
   sealed trait CheckResult:
     val studentId: String
 
-  case class NoSubmission(studentId: String) extends CheckResult
-  case class MissingFiles(studentId: String, attempt: Int, files: Seq[String])
+  case class MissingFiles(studentId: String, files: Seq[String])
       extends CheckResult
-  case class CompileError(studentId: String, attempt: Int) extends CheckResult
+  case class CompileError(studentId: String) extends CheckResult
   case class IssuesFound(
       studentId: String,
-      attempt: Int,
       issues: Map[String, Int]
   ) extends CheckResult
-  case class Success(studentId: String, attempt: Int) extends CheckResult
+  case class Success(studentId: String) extends CheckResult
 
   case class Config(
       labDir: Path,
@@ -67,21 +65,15 @@ object CheckTool:
   def checkStudent(studentDir: Path, cfg: Config): CheckResult = {
     val studentId = studentDir.getFileName.toString
 
-    val attemptDir =
-      latestAttemptDir(studentDir) match
-        case Some(s) => s
-        case None    => return logAndReturn(NoSubmission(studentId))
-
-    val attempt = attemptDir.getFileName.toString.toInt
-    val lintReport = cfg.lintDir.resolve(s"$studentId-$attempt.lint.txt")
-    val historyTemp = cfg.tmpDir.resolve(s"$studentId-$attempt-history")
+    val lintReport = cfg.lintDir.resolve(s"$studentId.lint.txt")
+    val historyTemp = cfg.tmpDir.resolve(s"$studentId-history")
 
     val contexts = cfg.targetFiles.map { labPath =>
       val fileName = labPath.getFileName.toString
       FileContext(
         fileName = fileName,
         labPath = labPath,
-        subPath = attemptDir.resolve(fileName),
+        subPath = studentDir.resolve(fileName),
         preSnap = cfg.tmpDir.resolve(s"$studentId.pre-$fileName"),
         postSnap = cfg.tmpDir.resolve(s"$studentId.post-$fileName")
       )
@@ -90,7 +82,7 @@ object CheckTool:
     val missing =
       contexts.filter(ctx => !Files.exists(ctx.subPath)).map(_.fileName)
     if (missing.nonEmpty) then
-      return logAndReturn(MissingFiles(studentId, attempt, missing))
+      return logAndReturn(MissingFiles(studentId, missing))
 
     Files.createDirectories(historyTemp)
     clearDirectory(historyTemp)
@@ -106,13 +98,13 @@ object CheckTool:
 
       // Compile
       if (!compile(cfg.labDir))
-        return logAndReturn(CompileError(studentId, attempt))
+        return logAndReturn(CompileError(studentId))
 
       // Preserve the submitted source, then format the version Lorikeet sees.
       contexts.foreach { ctx =>
         Files.copy(
           ctx.labPath,
-          cfg.originalDir.resolve(s"$studentId-$attempt-${ctx.fileName}"),
+          cfg.originalDir.resolve(s"$studentId-${ctx.fileName}"),
           StandardCopyOption.REPLACE_EXISTING
         )
       }
@@ -134,7 +126,7 @@ object CheckTool:
           Files.copy(
             history,
             cfg.historyDir.resolve(
-              s"$studentId-$attempt-${history.getFileName}"
+              s"$studentId-${history.getFileName}"
             ),
             StandardCopyOption.REPLACE_EXISTING
           )
@@ -155,7 +147,7 @@ object CheckTool:
       val anyChange = contexts
         .map { ctx =>
           val diffOut = cfg.diffDir.resolve(
-            s"$studentId-$attempt-${ctx.labPath.getFileName}.diff"
+            s"$studentId-${ctx.labPath.getFileName}.diff"
           )
           diff(ctx.preSnap, ctx.postSnap, diffOut).isDefined
         }
@@ -164,17 +156,17 @@ object CheckTool:
       val issuesFound = Files.exists(lintReport) || anyChange
       if (issuesFound) then
         val issueCounts = rules.groupBy(_.name).view.mapValues(_.size).toMap
-        logAndReturn(IssuesFound(studentId, attempt, issueCounts))
-      else logAndReturn(Success(studentId, attempt))
+        logAndReturn(IssuesFound(studentId, issueCounts))
+      else logAndReturn(Success(studentId))
 
     } catch {
       case e: Exception =>
         System.err.println(
           s"Internal error grading $studentId: ${e.getMessage}"
         )
-        CompileError(studentId, attempt)
+        CompileError(studentId)
     } finally {
-      // Cleanup attempt
+      // Cleanup submission
       contexts.foreach { ctx =>
         Files.deleteIfExists(ctx.labPath)
         Files.deleteIfExists(ctx.preSnap)
@@ -367,40 +359,19 @@ object CheckTool:
       result: CheckResult
   ): CheckResult = {
     val logMsg = result match {
-      case NoSubmission(studentId) =>
-        s"   -> ❓ MISSING: $studentId\n"
-      case MissingFiles(studentId, attempt, files) =>
-        s"   -> ❓ MISSING FILES: $studentId / $attempt -> ${files.mkString(", ")}\n"
-      case CompileError(studentId, attempt) =>
-        s"   -> ❌ ERROR:   $studentId / $attempt\n"
-      case IssuesFound(studentId, attempt, issues) =>
-        s"   -> ⚠️  ISSUES:  $studentId / $attempt -> ${issues
+      case MissingFiles(studentId, files) =>
+        s"   -> ❓ MISSING FILES: $studentId -> ${files.mkString(", ")}\n"
+      case CompileError(studentId) =>
+        s"   -> ❌ ERROR:   $studentId\n"
+      case IssuesFound(studentId, issues) =>
+        s"   -> ⚠️  ISSUES:  $studentId -> ${issues
             .map { case (rule, count) => s"$rule ($count)" }
             .mkString(", ")}\n"
-      case Success(studentId, attempt) =>
-        s"   -> ✅ SUCCESS: $studentId / $attempt\n"
+      case Success(studentId) =>
+        s"   -> ✅ SUCCESS: $studentId\n"
     }
     println(logMsg.trim)
     result
-  }
-
-  def latestAttemptDir(studentDir: Path): Option[Path] = {
-    val attemptDirs = Files
-      .list(studentDir)
-      .iterator()
-      .asScala
-      .filter(p =>
-        Files.isDirectory(p) && p.getFileName.toString.matches("\\d+")
-      )
-      .toSeq
-
-    if (attemptDirs.isEmpty) None
-    else {
-      val sortedDirs = attemptDirs.sortWith((a, b) =>
-        a.getFileName.toString.toInt < b.getFileName.toString.toInt
-      )
-      Some(sortedDirs.last)
-    }
   }
 
   def diff(
@@ -509,20 +480,20 @@ object CheckTool:
 
     val totalSubmissions = results.length
     val missingFiles = results.count {
-      case MissingFiles(_, _, _) => true
-      case _                     => false
-    }
-    val compileErrors = results.count {
-      case CompileError(_, _) => true
+      case MissingFiles(_, _) => true
       case _                  => false
     }
+    val compileErrors = results.count {
+      case CompileError(_) => true
+      case _               => false
+    }
     val ruleMatches = results.count {
-      case IssuesFound(_, _, _) => true
-      case _                    => false
+      case IssuesFound(_, _) => true
+      case _                 => false
     }
 
     val globalMatches = results
-      .collect { case IssuesFound(_, _, issues) =>
+      .collect { case IssuesFound(_, issues) =>
         issues
       }
       .flatMap(_.toSeq)
@@ -531,7 +502,7 @@ object CheckTool:
       .sortBy(-_._2)
 
     val studentMatches = results
-      .collect { case IssuesFound(studentId, _, issues) =>
+      .collect { case IssuesFound(studentId, issues) =>
         issues.map(_._1)
       }
       .flatten

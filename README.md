@@ -84,15 +84,14 @@ scaffold_projects/find/
 
 Use the sbt/Scalafix setup above, point `build.sbt` at the locally published Lorikeet version, and put assignment-specific rules in `.lorikeet.conf`. The batch script creates the target source directories and removes each copied submission after checking it.
 
-2. Arrange submissions by student and numeric attempt. The highest attempt is checked, and each submitted filename must match the basename of its configured target:
+2. Put each submission directly under its student directory. Each submitted filename must match the basename of its configured target:
 
 ```tree
-student-lab-submissions/2024/find/submissions/
+student-lab-submissions/2026/find/
 ├── alice/
-│   ├── 0/find.scala
-│   └── 1/find.scala
+│   └── find.scala
 └── bob/
-    └── 0/find.scala
+    └── find.scala
 ```
 
 3. Set `SCAFFOLD_DIR`, `SUBMISSIONS_DIR`, and `TARGET_FILES` at the top of `Check.scala`. Paths are relative to the repository root; `TARGET_FILES` are paths inside the scaffold.

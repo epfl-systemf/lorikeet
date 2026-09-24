@@ -113,6 +113,8 @@ python feedback_website/generate_feedback.py \
 
 `Check.scala` writes original sources, per-rewrite histories, lint reports, and final diffs under `grading/output/`. The feedback generator reads that directory by default. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
 
+For student-facing hosting with opaque report URLs and SQLite logging, follow the [feedback server deployment guide](feedback_server/README.md).
+
 ### Review generated feedback
 
 Open `http://127.0.0.1:8765/generated/overview.html`, select a submission, and use Next/Back to inspect each rewrite and final observation. Review a representative sample before distribution—especially broad patterns and formatting-only changes—and update `.lorikeet.conf` rather than editing generated HTML. The editor at `http://127.0.0.1:8765/` can refine feedback text and regenerate the pages.

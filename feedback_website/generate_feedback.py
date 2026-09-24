@@ -4,14 +4,17 @@
 Python 3.9+, standard library only. Runtime data defaults to grading/output.
 """
 import argparse
+import csv
 import hashlib
+import hmac
 import html
+import io
 import json
 import re
 import secrets
 import os
+import shutil
 import tempfile
-import csv
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -245,11 +248,13 @@ TRACKING_SCRIPT = r"""
     if(!online || sending)return;
     sending=true;
     try{
-      if(!token){const response=await request('/api/log-token');if(!response.ok)throw Error('Log connection failed');token=(await response.json()).token;}
+      if(!report.event_endpoint&&!token){const response=await request('/api/log-token');if(!response.ok)throw Error('Log connection failed');token=(await response.json()).token;}
       for(const record of ledger.values()){
         if(record.synced)continue;
-        const response=await request('/api/log-events',{method:'POST',headers:{'Content-Type':'application/json','X-Log-Token':token},body:JSON.stringify(record.event),keepalive:true});
-        if(!response.ok){if(response.status===403)token=null;throw Error('Log save failed');}
+        const headers={'Content-Type':'application/json'};
+        if(token)headers['X-Log-Token']=token;
+        const response=await request(report.event_endpoint||'/api/log-events',{method:'POST',headers,body:JSON.stringify(record.event),keepalive:true});
+        if(!response.ok){if(!report.event_endpoint&&response.status===403)token=null;throw Error('Log save failed');}
         record.synced=true;persist(record);
       }
     }catch{/* Leave unsent events queued for the next connection attempt. */}
@@ -346,7 +351,8 @@ def add_scalafmt_step(history, original):
         after=formatted[start:formatted_end], code=formatted))
 
 
-def build_report(report, sample_dir, lookup, mockup, include_scalafmt=False):
+def build_report(report, sample_dir, lookup, mockup, include_scalafmt=False,
+                 public_id=None):
     issues = parse_lint(report.read_text(encoding='utf-8'))
     run = report.parent.name.removeprefix('grading_reports_')
     submission = report.name.removesuffix('.lint.txt')
@@ -466,10 +472,15 @@ def build_report(report, sample_dir, lookup, mockup, include_scalafmt=False):
             '</span></div></header>' + timelines + empty + '</main>')
 
     relative = report.relative_to(sample_dir).as_posix()
-    filename = re.sub(r'[^A-Za-z0-9._-]', '-', run + '-' + submission) + '-' + hashlib.sha256(relative.encode()).hexdigest()[:8] + '.html'
-    metadata = dict(report_id=filename.removesuffix('.html'), submission=submission, run=run,
+    filename = (public_id.rsplit('/', 1)[-1] + '.html' if public_id else
+                re.sub(r'[^A-Za-z0-9._-]', '-', run + '-' + submission) + '-' +
+                hashlib.sha256(relative.encode()).hexdigest()[:8] + '.html')
+    metadata = dict(report_id=public_id or filename.removesuffix('.html'),
+                    submission=submission, run=run,
                     issues={key: dict(id=hashlib.sha256(json.dumps([key, value]).encode()).hexdigest()[:20], **value)
                             for key, value in feedback_items.items()})
+    if public_id:
+        metadata['event_endpoint'] = '/api/events'
     timeline_data = json.dumps({'histories': histories}, ensure_ascii=True).replace('<', '\\u003c')
     log_data = json.dumps(metadata, ensure_ascii=True).replace('<', '\\u003c')
     prism = ''.join((HERE / 'vendor' / name).read_text(encoding='utf-8')
@@ -503,12 +514,91 @@ def build_overview(entries, mockup):
                         '</style></head>')
 
 
+def report_files(args):
+    reports = sorted(args.data.glob('**/grading_reports_*/*.lint.txt'))
+    if args.run:
+        reports = [report for report in reports
+                   if report.parent.name == 'grading_reports_' + args.run]
+    if not reports:
+        suffix = ' for run ' + args.run if args.run else ''
+        raise ValueError('No grading reports found under {}{}'.format(args.data, suffix))
+    return reports
+
+
+def deployment_secret(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        secret = path.read_bytes()
+    else:
+        secret = secrets.token_bytes(32)
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(secret)
+    path.chmod(0o600)
+    if len(secret) < 32:
+        raise ValueError('Deployment secret must contain at least 32 bytes: ' + str(path))
+    return secret
+
+
+def publish(args, lookup, mockup, reports):
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', args.publish_lab):
+        raise ValueError('Publish lab must use 1-64 letters, numbers, underscores, or hyphens')
+    if not args.run:
+        raise ValueError('--publish-lab requires --run')
+
+    secret = deployment_secret(args.deployment_root / 'private' / 'hmac.key')
+    public_root = args.deployment_root / 'public'
+    public_root.mkdir(parents=True, exist_ok=True)
+    manifests = args.deployment_root / 'private' / 'links'
+    manifests.mkdir(parents=True, exist_ok=True)
+    rows = []
+
+    with tempfile.TemporaryDirectory(prefix='.' + args.publish_lab + '-', dir=public_root) as temporary:
+        lab_output = Path(temporary)
+        for report in reports:
+            submission = report.name.removesuffix('.lint.txt')
+            token = hmac.new(secret, (args.publish_lab + '\0' + submission).encode(),
+                             hashlib.sha256).hexdigest()
+            public_id = args.publish_lab + '/' + token
+            filename, _, page, _, _ = build_report(
+                report, args.data, lookup, mockup, args.include_scalafmt, public_id)
+            (lab_output / filename).write_text(page, encoding='utf-8')
+            rows.append((submission, '/r/' + public_id))
+
+        target = public_root / args.publish_lab
+        previous = public_root / ('.' + args.publish_lab + '-previous')
+        if previous.exists() and not target.exists():
+            previous.rename(target)
+        elif previous.exists():
+            shutil.rmtree(previous)
+        if target.exists():
+            target.rename(previous)
+        try:
+            lab_output.rename(target)
+        except BaseException:
+            if previous.exists() and not target.exists():
+                previous.rename(target)
+            raise
+        if previous.exists():
+            shutil.rmtree(previous)
+
+    manifest = manifests / (args.publish_lab + '.csv')
+    content = io.StringIO(newline='')
+    writer = csv.writer(content)
+    writer.writerow(('submission', 'url'))
+    writer.writerows(sorted(rows))
+    atomic_write(manifest, content.getvalue().encode())
+    print('Published {} reports for {}. Private links: {}'.format(
+        len(rows), args.publish_lab, manifest))
+
+
 def generate(args):
     templates, lookup = load_templates(args.rules)
     mockup = args.mockup.read_text(encoding='utf-8')
-    reports = sorted(args.data.glob('**/grading_reports_*/*.lint.txt'))
-    if not reports:
-        raise ValueError('No grading_reports_*/*.lint.txt files found under ' + str(args.data))
+    reports = report_files(args)
+    if args.publish_lab:
+        return publish(args, lookup, mockup, reports)
     pages = [build_report(report, args.data, lookup, mockup, args.include_scalafmt)
              for report in reports]
     args.output.mkdir(parents=True, exist_ok=True)
@@ -840,11 +930,17 @@ def main():
     parser.add_argument('--mockup', type=Path, default=HERE / 'feedback_mockup.html')
     parser.add_argument('--output', type=Path, default=grading_output / 'feedback')
     parser.add_argument('--logs', type=Path, default=grading_output / 'feedback_logs')
+    parser.add_argument('--run', help='Only generate one grading run timestamp')
+    parser.add_argument('--publish-lab', help='Publish one lab with opaque student URLs')
+    parser.add_argument('--deployment-root', type=Path,
+                        default=grading_output / 'deployment')
     parser.add_argument('--include-scalafmt', action='store_true',
                         help='Show formatting saved by Check.scala as the first timeline rewrite')
     parser.add_argument('--serve', action='store_true', help='Start the local template editor')
     parser.add_argument('--port', type=int, default=8765)
     args = parser.parse_args()
+    if args.publish_lab and args.serve:
+        parser.error('--publish-lab cannot be combined with the local review server')
     try:
         generate(args)
         if args.serve:

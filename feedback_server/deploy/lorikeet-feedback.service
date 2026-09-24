@@ -1,0 +1,25 @@
+[Unit]
+Description=Lorikeet student feedback
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=lorikeet-feedback
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/java -jar /opt/lorikeet-feedback/feedback-server.jar
+Environment=FEEDBACK_PUBLIC_DIR=/srv/lorikeet-feedback/public
+Environment=FEEDBACK_DB=/var/lib/lorikeet-feedback/feedback.sqlite
+Environment=FEEDBACK_HOST=127.0.0.1
+Environment=FEEDBACK_PORT=8766
+Restart=on-failure
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadOnlyPaths=/srv/lorikeet-feedback
+
+[Install]
+WantedBy=multi-user.target

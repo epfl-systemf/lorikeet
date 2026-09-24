@@ -3,6 +3,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import generate_feedback
 
@@ -126,6 +127,39 @@ var current = false
             self.assertIn('class="line-number"', mockup)
             self.assertIn('data-expand-${direction}', mockup)
             self.assertIn('focus-line', mockup)
+
+            deployment = root / "deployment"
+            publish_args = SimpleNamespace(
+                publish_lab="find-2026",
+                run="demo",
+                deployment_root=deployment,
+                data=root,
+                include_scalafmt=True,
+            )
+            generate_feedback.publish(publish_args, {}, mockup, [report])
+            manifest = deployment / "private" / "links" / "find-2026.csv"
+            link = manifest.read_text(encoding="utf-8").splitlines()[1].split(",", 1)[1]
+            published = deployment / "public" / "find-2026" / (link.rsplit("/", 1)[1] + ".html")
+            self.assertTrue(published.is_file())
+            self.assertFalse((deployment / "public" / "overview.html").exists())
+            self.assertIn(
+                '"event_endpoint": "/api/events"',
+                published.read_text(encoding="utf-8"),
+            )
+
+            other_lab = deployment / "public" / "boids-2026"
+            other_lab.mkdir()
+            other_lab.joinpath("existing.html").touch()
+            generate_feedback.publish(publish_args, {}, mockup, [report])
+            self.assertEqual(
+                manifest.read_text(encoding="utf-8").splitlines()[1].split(",", 1)[1],
+                link,
+            )
+            self.assertTrue(other_lab.joinpath("existing.html").is_file())
+            self.assertEqual(
+                (deployment / "private" / "hmac.key").stat().st_mode & 0o777,
+                0o600,
+            )
 
 
 if __name__ == "__main__":

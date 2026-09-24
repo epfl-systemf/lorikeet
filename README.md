@@ -107,7 +107,7 @@ Submissions that do not compile are reported and skipped by Lorikeet.
 5. Generate and serve the offline feedback site from the timestamped grading outputs:
 
 ```bash
-python feedback_website/generate_feedback.py \
+scala-cli run feedback_website/GenerateFeedback.scala -- \
   --include-scalafmt --serve
 ```
 

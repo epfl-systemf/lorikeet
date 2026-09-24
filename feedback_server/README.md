@@ -4,7 +4,7 @@ The deployment server exposes only opaque report URLs, event ingestion, and a he
 
 ## Build and publish
 
-Requirements on the build machine: Python 3.9+, Java 17+, and Scala CLI. Find available run timestamps with:
+Requirements on the build machine: Java 17+ and Scala CLI. Find available run timestamps with:
 
 ```bash
 find grading/output -maxdepth 1 -type d -name 'grading_reports_*' | sort

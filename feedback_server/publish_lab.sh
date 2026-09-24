@@ -12,8 +12,10 @@ run=$2
 data=${3:-"$repo_root/grading/output"}
 deployment_root=${LORIKEET_DEPLOYMENT_ROOT:-"$repo_root/grading/output/deployment"}
 
-python3 "$repo_root/feedback_website/generate_feedback.py" \
+scala-cli run "$repo_root/feedback_website/GenerateFeedback.scala" -- \
   --data "$data" \
+  --rules "$repo_root/feedback_website/rule_templates.json" \
+  --mockup "$repo_root/feedback_website/feedback_mockup.html" \
   --run "$run" \
   --publish-lab "$lab" \
   --deployment-root "$deployment_root" \

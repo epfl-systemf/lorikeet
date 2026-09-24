@@ -44,3 +44,7 @@ bin/
 
 # general
 *.class
+__pycache__/
+feedback_website/generated/
+feedback_website/logs/
+feedback_website/*.bak

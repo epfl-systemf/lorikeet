@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "file": "src/main/scala/find/OverlappingFind.scala",
+  "limit": 40,
+  "truncated": false,
+  "initial": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      if entry.isDirectory() then\n        if entry.hasChildren() then\n          name.equals(entry.name())\n        else\n          false\n      else\n        false\n\n    val noChildren =\n      if entry.hasChildren() then false else true\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if entry.isDirectory() then\n      if entry.hasChildren() then\n        println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path());\n    true\n",
+  "steps": [
+    {
+      "rule": "Negated Boolean If",
+      "description": "if c then false else true  ==>  !c",
+      "start": 588,
+      "end": 631,
+      "line": 29,
+      "column": 7,
+      "before": "if entry.hasChildren() then false else true",
+      "after": "!entry.hasChildren()",
+      "code": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      if entry.isDirectory() then\n        if entry.hasChildren() then\n          name.equals(entry.name())\n        else\n          false\n      else\n        false\n\n    val noChildren =\n      !entry.hasChildren()\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if entry.isDirectory() then\n      if entry.hasChildren() then\n        println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path());\n    true\n"
+    },
+    {
+      "rule": "False Else Branch",
+      "description": "if c then e else false  ==>  c && e",
+      "start": 406,
+      "end": 559,
+      "line": 20,
+      "column": 7,
+      "before": "if entry.isDirectory() then\n        if entry.hasChildren() then\n          name.equals(entry.name())\n        else\n          false\n      else\n        false",
+      "after": "entry.isDirectory() && (if (entry.hasChildren()) name.equals(entry.name()) else false)",
+      "code": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      entry.isDirectory() && (if (entry.hasChildren()) name.equals(entry.name()) else false)\n\n    val noChildren =\n      !entry.hasChildren()\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if entry.isDirectory() then\n      if entry.hasChildren() then\n        println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path());\n    true\n"
+    },
+    {
+      "rule": "False Else Branch",
+      "description": "if c then e else false  ==>  c && e",
+      "start": 430,
+      "end": 491,
+      "line": 20,
+      "column": 31,
+      "before": "if (entry.hasChildren()) name.equals(entry.name()) else false",
+      "after": "entry.hasChildren() && name.equals(entry.name())",
+      "code": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      entry.isDirectory() && (entry.hasChildren() && name.equals(entry.name()))\n\n    val noChildren =\n      !entry.hasChildren()\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if entry.isDirectory() then\n      if entry.hasChildren() then\n        println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path());\n    true\n"
+    },
+    {
+      "rule": "Equals Method",
+      "description": "Use Scala's null-safe == operator instead of .equals",
+      "start": 453,
+      "end": 478,
+      "line": 20,
+      "column": 54,
+      "before": "name.equals(entry.name())",
+      "after": "name == entry.name()",
+      "code": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      entry.isDirectory() && (entry.hasChildren() && name == entry.name())\n\n    val noChildren =\n      !entry.hasChildren()\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if entry.isDirectory() then\n      if entry.hasChildren() then\n        println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path());\n    true\n"
+    },
+    {
+      "rule": "Nested Side-effecting If",
+      "description": "Combine nested conditions that guard the same side effect",
+      "start": 636,
+      "end": 740,
+      "line": 29,
+      "column": 5,
+      "before": "if entry.isDirectory() then\n      if entry.hasChildren() then\n        println(entry.firstChild().path())",
+      "after": "if (entry.isDirectory() && entry.hasChildren()) println(entry.firstChild().path())",
+      "code": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      entry.isDirectory() && (entry.hasChildren() && name == entry.name())\n\n    val noChildren =\n      !entry.hasChildren()\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if (entry.isDirectory() && entry.hasChildren()) println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path());\n    true\n"
+    },
+    {
+      "rule": "Semicolon Usage",
+      "description": "Semicolons at the end of a line are unnecessary in Scala",
+      "start": 1309,
+      "end": 1310,
+      "line": 51,
+      "column": 26,
+      "before": ";",
+      "after": "",
+      "code": "package find\n\nimport scala.util.Random\n\ntrait Entry:\n  def isDirectory(): Boolean\n  def hasChildren(): Boolean\n  def firstChild(): Entry\n  def hasNextSibling(): Boolean\n  def nextSibling(): Entry\n  def name(): String\n  def path(): String\n  def size(): Long\n\nobject OverlappingFind:\n  def findByName(entry: Entry, name: String, minSize: Long): Boolean =\n    var matching = false\n\n    val inChildren =\n      entry.isDirectory() && (entry.hasChildren() && name == entry.name())\n\n    val noChildren =\n      !entry.hasChildren()\n\n    if !entry.isDirectory() && entry.size() >= minSize then\n      println(entry.path())\n      return true\n\n    if (entry.isDirectory() && entry.hasChildren()) println(entry.firstChild().path())\n\n    var current = entry\n    while current.hasNextSibling() do\n      current = current.nextSibling()\n      if current.name() == name && !current.isDirectory() then\n        println(current.path())\n        matching = true\n\n    matching | inChildren\n\n  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =\n    F(E)\n\n  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =\n    predicate(entry)\n\n  def returnPosition(entry: Entry): Boolean =\n    var found = entry.hasChildren()\n    return found\n\n  def trailingLiteral(entry: Entry): Boolean =\n    println(entry.path())\n    true\n"
+    }
+  ]
+}

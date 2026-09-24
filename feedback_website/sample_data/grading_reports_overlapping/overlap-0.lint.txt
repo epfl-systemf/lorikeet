@@ -1,0 +1,88 @@
+[Unexpected Import]
+Remove imports that are not needed by the solution (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:3:1
+import scala.util.Random
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+[Var Usage]
+Use vals and recursion instead of mutable state (4 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:17:5
+    var matching = false
+    ^^^^^^^^^^^^^^^^^^^^
+
+src/main/scala/find/OverlappingFind.scala:17:5
+    var matching = false
+    ^^^^^^^^^^^^^^^^^^^^
+
+src/main/scala/find/OverlappingFind.scala:39:5
+    var current = entry
+    ^^^^^^^^^^^^^^^^^^^
+
+src/main/scala/find/OverlappingFind.scala:55:5
+    var found = entry.hasChildren()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+[False Else Branch]
+if c then e else false  ==>  c && e (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:20:7
+      if entry.isDirectory() then
+      ^
+
+[Negated Boolean If]
+if c then false else true  ==>  !c (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:29:7
+      if entry.hasChildren() then false else true
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+[Early Return]
+An early return makes this recursive search harder to compose (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:33:7
+      return true
+      ^^^^^^^^^^^
+
+[Nested Side-effecting If]
+Combine nested conditions that guard the same side effect (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:35:5
+    if entry.isDirectory() then
+    ^
+
+[While Loop]
+Use recursion for sibling traversal in this exercise (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:40:5
+    while current.hasNextSibling() do
+    ^
+
+[Uppercase Parameter Name]
+Name parameters with lowerCamelCase (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:48:3
+  def helperParcours(F: Entry => Boolean, E: Entry): Boolean =
+  ^
+
+[Higher-order Function Too Early]
+This exercise introduces direct recursion before higher-order functions (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:51:3
+  def applyPredicate(predicate: Entry => Boolean, entry: Entry): Boolean =
+  ^
+
+[Return In Return Position]
+The final expression is returned without an explicit return (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:56:5
+    return found
+    ^^^^^^^^^^^^
+
+[Semicolon Usage]
+Semicolons at the end of a line are unnecessary in Scala (1 occurrences)
+
+src/main/scala/find/OverlappingFind.scala:59:26
+    println(entry.path());
+                         ^

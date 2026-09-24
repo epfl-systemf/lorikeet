@@ -44,6 +44,8 @@ object CheckTool:
       labDir: Path,
       submissionsDir: Path,
       diffDir: Path,
+      historyDir: Path,
+      originalDir: Path,
       lintDir: Path,
       tmpDir: Path,
       targetFiles: Seq[Path]
@@ -72,6 +74,7 @@ object CheckTool:
 
     val attempt = attemptDir.getFileName.toString.toInt
     val lintReport = cfg.lintDir.resolve(s"$studentId-$attempt.lint.txt")
+    val historyTemp = cfg.tmpDir.resolve(s"$studentId-$attempt-history")
 
     val contexts = cfg.targetFiles.map { labPath =>
       val fileName = labPath.getFileName.toString
@@ -89,6 +92,8 @@ object CheckTool:
     if (missing.nonEmpty) then
       return logAndReturn(MissingFiles(studentId, attempt, missing))
 
+    Files.createDirectories(historyTemp)
+    clearDirectory(historyTemp)
     try {
       contexts.foreach { ctx =>
         Files.copy(
@@ -102,7 +107,14 @@ object CheckTool:
       if (!compile(cfg.labDir))
         return logAndReturn(CompileError(studentId, attempt))
 
-      // Format and snapshot original
+      // Preserve the submitted source, then format the version Lorikeet sees.
+      contexts.foreach { ctx =>
+        Files.copy(
+          ctx.labPath,
+          cfg.originalDir.resolve(s"$studentId-$attempt-${ctx.fileName}"),
+          StandardCopyOption.REPLACE_EXISTING
+        )
+      }
       formatCode(cfg.labDir)
       contexts.foreach { ctx =>
         Files.copy(
@@ -113,8 +125,20 @@ object CheckTool:
       }
 
       // Linting check
-      val (lintCode, lintOut) = runScalafix(cfg.labDir, cfg)
+      val (_, lintOut) = runScalafix(cfg.labDir, cfg, historyTemp)
       val rules = processLintReport(lintOut, lintReport, cfg.labDir)
+      val histories = Files.list(historyTemp)
+      try
+        histories.iterator().asScala.foreach { history =>
+          Files.copy(
+            history,
+            cfg.historyDir.resolve(
+              s"$studentId-$attempt-${history.getFileName}"
+            ),
+            StandardCopyOption.REPLACE_EXISTING
+          )
+        }
+      finally histories.close()
 
       // Apply fixes, reformat
       formatCode(cfg.labDir)
@@ -155,10 +179,22 @@ object CheckTool:
         Files.deleteIfExists(ctx.preSnap)
         Files.deleteIfExists(ctx.postSnap)
       }
+      clearDirectory(historyTemp)
+      Files.deleteIfExists(historyTemp)
     }
   }
 
-  def runScalafix(labDir: Path, cfg: Config): (Int, String) = {
+  private def clearDirectory(directory: Path): Unit = {
+    val entries = Files.list(directory)
+    try entries.iterator().asScala.foreach(Files.deleteIfExists(_))
+    finally entries.close()
+  }
+
+  def runScalafix(
+      labDir: Path,
+      cfg: Config,
+      historyDir: Path
+  ): (Int, String) = {
     val output = new StringBuilder
     val logger = ProcessLogger(
       (s: String) => output.append(s).append('\n'),
@@ -171,7 +207,11 @@ object CheckTool:
       "--client",
       "scalafix MetaRule " + fileArgs
     )
-    val exitCode = Process(command, labDir.toFile).!(logger)
+    val exitCode = Process(
+      command,
+      labDir.toFile,
+      "LORIKEET_HISTORY_DIR" -> historyDir.toString
+    ).!(logger)
     (exitCode, output.toString())
   }
 
@@ -287,9 +327,8 @@ object CheckTool:
         None
     }
 
-    val foundRules = issueBlock.map(issue =>
-      Rule(issue.ruleName, issue.message)
-    )
+    val foundRules =
+      issueBlock.map(issue => Rule(issue.ruleName, issue.message))
 
     val report = issueBlock
       .groupBy( // rule name and message
@@ -435,6 +474,8 @@ object CheckTool:
       labDir = ROOT.resolve(LAB_DIR_NAME),
       submissionsDir = ROOT.resolve(SUBMISSIONS_DIR_NAME),
       diffDir = ROOT.resolve(s"grading_diffs_$timestamp"),
+      historyDir = ROOT.resolve(s"grading_histories_$timestamp"),
+      originalDir = ROOT.resolve(s"grading_originals_$timestamp"),
       lintDir = ROOT.resolve(s"grading_reports_$timestamp"),
       tmpDir = ROOT.resolve("tmp"),
       targetFiles = TARGET_FILES.map(f => ROOT.resolve(LAB_DIR_NAME).resolve(f))
@@ -442,11 +483,15 @@ object CheckTool:
 
     List(
       cfg.diffDir,
+      cfg.historyDir,
+      cfg.originalDir,
       cfg.lintDir,
       cfg.tmpDir
     ).foreach(x => Files.createDirectories(x))
 
     println(s"Diffs directory: ${cfg.diffDir}")
+    println(s"Rewrite histories directory: ${cfg.historyDir}")
+    println(s"Original sources directory: ${cfg.originalDir}")
     println(s"Lint reports directory: ${cfg.lintDir}\n")
     println("Starting grading process...\n")
 

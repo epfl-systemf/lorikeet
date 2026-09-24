@@ -5,6 +5,8 @@ This guide explains how to write custom Lorikeet rules. For setup and usage inst
 The structure of the configuration file `.lorikeet.conf` is as follows:
 
 ```hocon
+max-rewrites = 100
+
 rules = [
   {
     name = "RuleName"
@@ -19,6 +21,7 @@ rules = [
 ]
 ```
 
+- `max-rewrites` (optional, default: 100): Maximum rewrites applied to each code file. Lorikeet stops at this bound even if another rule still matches, preventing recursive or cyclic rules from running forever.
 - `name`: The name of the rule, used to identify it when running scalafix.
 - `pattern`: The query pattern to match in the code. See Matcher section below for syntax.
 - `rewrite` (optional): The template to use for rewriting matched code. See Rewriter section below for syntax. If omitted, Scalafix will only report matches without rewriting them.
@@ -27,11 +30,24 @@ rules = [
 - `match-fqn` (optional, default: true): If true, fully qualified names in the pattern are interpreted as semantic symbol constraints rather than strict syntactic paths.
 - `only-packages` (optional): If specified, restricts matching to code within the listed packages.
 
-The tool will search for instances of code that match the `pattern`, and replace them with the `rewrite` template. Both the `pattern` and `rewrite` fields are written in Scala 3 syntax, with additional constructs for matching and rewriting.
+The tool repeatedly applies one rewrite until no rule matches or `max-rewrites` is reached. It checks rules in configuration order, rewrites the first source-order match for the selected rule, then starts matching again from the first rule. Both the `pattern` and `rewrite` fields are written in Scala 3 syntax, with additional constructs for matching and rewriting.
+
+For punctuation or other syntax that is not preserved in the Scala syntax tree, add a token rule. Its regular expression must match one complete Scala token, so the same text inside a comment or string is not changed. Token rules run after the structural rules and share `max-rewrites`:
+
+```hocon
+token-rules = [{
+  name = "Semicolon Usage"
+  description = "Semicolons at the end of a line are unnecessary in Scala"
+  pattern = """;(?=[ \t]*(?://[^\r\n]*)?(?:\r?\n|$))"""
+  rewrite = ""
+}]
+```
 
 ## Matcher
 
 The Matcher structurally compares target code and query patterns (The `pattern` field of a rule). Query patterns are matched literally, except for special syntax that allows for more flexible matching, in particular it uses two main constructs: Metavariables and Pattern Blocks.
+
+A block containing exactly one expression is transparent during matching: `expression` and `{ expression }` match interchangeably. Blocks containing definitions, imports, or multiple statements remain structural because removing their scope can change the program.
 
 ### Metavariables
 
@@ -99,6 +115,6 @@ Referencing a binding that was not created in the Matcher will result in an erro
 
 ## Implementation Notes
 
-- **Top-level matches only**: To prevent overlapping patches (which can break code), the tool only considers top-level matches. If a match is found inside another match, only the outer (parent) match is rewritten. You may need to run Scalafix multiple times to catch all nested smells.
+- **Overlapping matches**: Rewrites are applied sequentially rather than as overlapping Scalafix patches. A rewrite can therefore expose another match in the same invocation.
 - **Binding limits**: Currently, the tool cannot bind a semantic type to a metavariable if that type was inferred (not explicitly written in code).
 - **Scalafix Bug**: the script may occasionally (~1 in 100) fail to generate a lint report due to an upstream issue, even if the rewrite is successful

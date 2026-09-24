@@ -1,7 +1,7 @@
 package lorikeet.core
 
 import scala.meta._
-import scala.io.Source._
+import scala.util.matching.Regex
 import pureconfig._
 import pureconfig.error._
 
@@ -14,7 +14,24 @@ case class RuleConfig(
     pattern: String,
     rewrite: Option[String]
 ) derives ConfigReader
-case class RulesConfig(rules: List[RuleConfig]) derives ConfigReader
+case class TokenRuleConfig(
+    name: String,
+    onlyPackages: Option[List[String]],
+    description: Option[String],
+    pattern: String,
+    rewrite: Option[String]
+) derives ConfigReader
+case class RulesConfig(
+    maxRewrites: Option[Int],
+    rules: List[RuleConfig],
+    tokenRules: Option[List[TokenRuleConfig]]
+) derives ConfigReader
+
+case class ParsedConfig(
+    maxRewrites: Int,
+    rules: List[CustomRule],
+    tokenRules: List[TokenRule]
+)
 
 enum LintLevel:
   case Full
@@ -34,7 +51,7 @@ object Config:
         )
         LintLevel.Full
 
-  def parseRulesConfig(config: Option[String]): List[CustomRule] =
+  def parseConfig(config: Option[String]): ParsedConfig =
     val configResults: Either[ConfigReaderFailures, RulesConfig] =
       config match
         case Some(configStr) =>
@@ -45,8 +62,8 @@ object Config:
             case Some(filename) => filename
           ConfigSource.file(configFile).load[RulesConfig]
 
-    val rules: List[RuleConfig] = configResults match
-      case Right(r) => r.rules
+    val loadedConfig = configResults match
+      case Right(r) => r
       case Left(e) =>
         val source = config match
           case Some(_) => "config string"
@@ -57,7 +74,11 @@ object Config:
             s"Error: ${e.prettyPrint()}"
         )
 
-    val ruleTrees: List[CustomRule] = rules.map { rule =>
+    val maxRewrites = loadedConfig.maxRewrites.getOrElse(100)
+    if maxRewrites <= 0 then
+      throw new Exception("max-rewrites must be greater than zero.")
+
+    val ruleTrees: List[CustomRule] = loadedConfig.rules.map { rule =>
       val matchTree = parseCode(rule.pattern, rule.name, "match pattern")
 
       val rewriteTree = rule.rewrite match
@@ -77,7 +98,24 @@ object Config:
       )
     }
 
-    ruleTrees
+    val tokenRules = loadedConfig.tokenRules.getOrElse(Nil).map { rule =>
+      val pattern =
+        try Regex(rule.pattern)
+        catch
+          case error: java.util.regex.PatternSyntaxException =>
+            throw new Exception(
+              s"Could not parse token pattern for rule '${rule.name}': ${error.getDescription}"
+            )
+      TokenRule(
+        rule.name,
+        pattern,
+        rule.rewrite,
+        rule.onlyPackages,
+        rule.description
+      )
+    }
+
+    ParsedConfig(maxRewrites, ruleTrees, tokenRules)
 
   def parseCode(code: String, ruleName: String, codeType: String): Stat =
     given scala.meta.Dialect = scala.meta.dialects.Scala3
@@ -90,5 +128,20 @@ object Config:
           case Parsed.Error(_, msgScala2, _) =>
             throw new Exception(
               s"Could not parse $codeType for rule '$ruleName'. " +
+                s"Scala 3 error: $msgScala3. Scala 2 error: $msgScala2"
+            )
+
+  def parseSource(code: String, filename: String): Source =
+    val input = Input.VirtualFile(filename, code)
+    given scala.meta.Dialect = scala.meta.dialects.Scala3
+    input.parse[Source] match
+      case Parsed.Success(t) => t
+      case Parsed.Error(_, msgScala3, _) =>
+        given scala.meta.Dialect = scala.meta.dialects.Scala213
+        input.parse[Source] match
+          case Parsed.Success(t) => t
+          case Parsed.Error(_, msgScala2, _) =>
+            throw new Exception(
+              s"Lorikeet produced code that could not be parsed. " +
                 s"Scala 3 error: $msgScala3. Scala 2 error: $msgScala2"
             )

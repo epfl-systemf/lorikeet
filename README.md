@@ -111,12 +111,16 @@ The script will replace the `assignment.scala` file in the scaffold project with
 Note that submissions that do not compile will be reported as such but will not be checked with scalafix. This means it may be a good idea to remove `-Xfatal-warnings` or other such flags
 from the scaffold project.
 
-The script output will be individual diffs for each submissions, as well as individual feedback (which rules matches, with their descriptions and where specifically in the code), and a summary at the end with statistics on how many submissions passed each rule.
+The script output includes original sources, final diffs, exact per-rewrite JSON histories, individual feedback, and a summary of how many submissions matched each rule. The original sources let the feedback website optionally show the initial Scalafmt change.
+
+Use `python feedback_website/generate_feedback.py --data <grading-output-directory> --include-scalafmt` to include that formatting change as the first timeline rewrite.
 
 The console output looks something like this:
 
 ```text
 Diffs directory: ~evaluating/grading_diffs_2026.01.01_14.26.00
+Rewrite histories directory: ~evaluating/grading_histories_2026.01.01_14.26.00
+Original sources directory: ~evaluating/grading_originals_2026.01.01_14.26.00
 Lint reports directory: ~/evaluating/grading_reports_2026.01.01_14.26.00
 
 Starting grading process...

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rule description editor</title>
+<script>if(location.protocol === "file:") location.replace("http://127.0.0.1:8765/");</script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#202124;font:15px/1.5 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:28px 20px}header{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#f6f7f9;padding:14px 0;gap:16px}h1{margin:0;font-size:24px}button{font:inherit;border:0;border-radius:8px;background:#5b5bd6;color:white;padding:10px 22px;cursor:pointer}button:disabled{opacity:.5;cursor:default}section{margin:16px 0;background:white;border:1px solid #e5e7eb;border-radius:10px;padding:18px}label{display:block;font-weight:650;margin-bottom:10px}textarea{width:100%;min-height:105px;padding:10px;border:1px solid #d1d5db;border-radius:6px;font:14px/1.6 system-ui,sans-serif;resize:vertical}#status{font-size:13px;color:#6b7280;min-height:24px}#status.error{color:#b42318}
+</style>
+</head>
+<body><main><header><h1>Rule description editor</h1><button id="save" disabled>Save changes</button></header><div id="status" role="status" aria-live="polite"></div><div id="rules">__RULE_ROWS__</div></main>
+<script type="application/json" id="editor-data">__EDITOR_CONFIG__</script>
+<script>
+(() => {
+if(location.protocol === "file:") return;
+const config=JSON.parse(document.getElementById("editor-data").textContent);
+let templates=config.templates,revision=config.revision,baseline=JSON.stringify(config.templates),busy=false,loaded=true;
+const save=document.getElementById('save'),status=document.getElementById('status');
+function dirty(){return JSON.stringify(templates)!==baseline;}
+function message(text,error=false){status.textContent=text;status.className=error?'error':'';}
+function controls(){save.disabled=!loaded||busy||!dirty();}
+document.querySelectorAll('textarea[data-rule]').forEach(input=>{input.oninput=()=>{templates[input.dataset.rule].explanation=input.value;message(dirty()?'Unsaved changes':'');controls();};});
+
+save.onclick=async()=>{busy=true;controls();const snapshot=JSON.stringify(templates);message('Saving…');try{const response=await fetch('/api/templates',{method:'POST',headers:{'Content-Type':'application/json','X-Editor-Token':config.token},body:JSON.stringify({templates:JSON.parse(snapshot),revision})});const data=await response.json();if(!response.ok)throw Error(data.error);revision=data.revision;baseline=snapshot;message(data.message+(dirty()?' You still have unsaved changes.':''));}catch(error){message('Could not save: '+error.message,true);}finally{busy=false;controls();}};
+window.addEventListener('beforeunload',event=>{if(loaded&&dirty()){event.preventDefault();event.returnValue='';}});
+controls();
+})();
+</script></body></html>

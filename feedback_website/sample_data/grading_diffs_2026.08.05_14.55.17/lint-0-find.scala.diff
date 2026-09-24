@@ -1,0 +1,6 @@
+--- a/find.scala
++++ b/find.scala
+@@ -6,2 +6,2 @@
+   def simplifiedCondition(ready: Boolean): Boolean =
+-    if ready then false else !ready
++    !ready && !ready

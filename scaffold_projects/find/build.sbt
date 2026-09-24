@@ -1,4 +1,8 @@
-scalaVersion := "3.7.4"
+name := "find"
+scalaVersion := "3.9.0"
+scalacOptions ++= Seq("-deprecation", "-feature", "-Werror")
+libraryDependencies += "com.lihaoyi" %% "os-lib" % "0.11.5"
+libraryDependencies += "org.scalameta" %% "munit" % "1.1.1" % Test
 
 semanticdbEnabled := true
 semanticdbVersion := scalafixSemanticdb.revision

@@ -50,3 +50,4 @@ feedback_website/generated/
 feedback_website/logs/
 feedback_website/*.bak
 /grading/output/
+/student-lab-submissions/2026/

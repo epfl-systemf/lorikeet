@@ -32,5 +32,21 @@ The mandatory work should use the supplied `cs214.Entry` interface and
 structural recursion; built-in filesystem traversal and external libraries do
 not satisfy the tests. The optional, ungraded bonus implements
 `findFirstByNameAndPrint`, which prints only the first matching name. This is an
-early course exercise, before later abstraction and higher-order-function
-material.
+early course exercise.
+
+## Learning scope at submission
+
+This lab was released in week 1 and due in week 2. At release, the course had
+covered functional programming, recursion, `def`, blocks, `if … then … else`,
+`val`, basic `Int`/`Boolean`/`String` values, and the basic operators including
+`&&`, `||`, and `==`. It explicitly had **not** introduced `var`, `for`, or
+`while`. The lab reinforces APIs, tree traversals, tests, and mocking.
+
+By the deadline, function types, anonymous functions, currying, and classes
+had been introduced, but the dedicated callback that refactors `find` with
+higher-order functions was scheduled for week 3. Therefore, assess the required
+solution as a direct structural-recursion exercise: prefer clear,
+expression-oriented code and do not require later abstractions or treat valid
+Scala syntax as wrong merely because it is not needed here.
+
+Source: [CS-214 Fall 2026 syllabus](https://cs-214.epfl.ch/info/syllabus/).

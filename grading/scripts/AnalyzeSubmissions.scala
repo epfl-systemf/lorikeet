@@ -28,7 +28,6 @@ object AnalyzeSubmissions:
     """Usage: scala-cli run grading/scripts/AnalyzeSubmissions.scala -- [options]
       |  --submissions PATH     directory containing student submission directories (required)
       |  --lab PATH             laboratory description in Markdown/text (required)
-      |  --context PATH         optional learning-context Markdown/text
       |  --output PATH          aggregate Markdown output (default: grading/output/llm-smells.local.md)
       |  --model NAME           local model name (default: gpt-oss:20b-32k)
       |  --base-url URL         loopback OpenAI-compatible URL (default: http://127.0.0.1:11434/v1)
@@ -39,7 +38,6 @@ object AnalyzeSubmissions:
   final case class Config(
       submissions: Path,
       lab: Path,
-      context: Option[Path],
       output: Path,
       model: String,
       baseUrl: String,
@@ -60,8 +58,6 @@ object AnalyzeSubmissions:
     val config = parseArgs(arguments.toSeq)
     requireLoopback(config.baseUrl)
     val lab = readRequired(config.lab, "laboratory description")
-    val context =
-      config.context.map(readRequired(_, "learning context")).getOrElse("")
     val files = scalaFiles(config.submissions)
     if files.isEmpty then
       throw IllegalArgumentException(
@@ -109,7 +105,7 @@ object AnalyzeSubmissions:
           val report = ask(
             client.get,
             config.model,
-            prompt(lab, context, relative, source)
+            prompt(lab, relative, source)
           )
           val smells = parseSmells(report, source)
           append(config.output, render(relative, smells))
@@ -154,22 +150,18 @@ object AnalyzeSubmissions:
       |Return JSON only, with exactly this shape:
       |{"smells":[{"title":"short reusable pattern name","snippet":"exact contiguous source excerpt","start_line":1,"end_line":1,"explanation":"why this is a teachable code smell","rewrite_hint":"a concise direction for a safer or clearer rewrite"}]}
       |
-      |Report only concrete, recurring, source-level patterns suitable for later conversion into syntax-based Lorikeet rules. Each snippet must be copied exactly from the supplied source and include enough surrounding code to understand a rewrite. Do not report an item when no reliable snippet exists. An empty smells array is valid.
+      |Overapproximate: report plausible source-level code smells even when they require later human review. Focus on patterns that arise from general programming experience, good Scala practice, and the learning scope in the supplied laboratory description. Each snippet must be copied exactly from the supplied source and include enough surrounding code to understand a rewrite. An empty smells array is valid.
       |
-      |Typical beginner Scala topics include expression-oriented code (avoid unnecessary return and semicolons), immutable values instead of var when practical, simplifying boolean literals and redundant/nested conditionals, using == rather than .equals when appropriate, and recursive tree traversal instead of while when the assignment requires recursion. Respect the supplied laboratory description and learning context; do not invent course restrictions. In particular, do not report the | operator merely because it appears.
+      |Do not use, infer, or reproduce any prior lint reports, previously reported smells, or external context files. Do not judge correctness, grading, or style unrelated to the stated learning objectives. Do not report a construct merely because it is valid Scala but unnecessary, and do not report the | operator merely because it appears.
       |""".stripMargin
 
   private def prompt(
       lab: String,
-      context: String,
       relative: String,
       source: String
   ): String =
     s"""Laboratory description:
        |$lab
-       |
-       |Learning context:
-       |${if context.nonEmpty then context else "(none supplied)"}
        |
        |File: $relative
        |
@@ -295,7 +287,6 @@ object AnalyzeSubmissions:
   private def parseArgs(arguments: Seq[String]): Config =
     var submissions: Option[Path] = None
     var lab: Option[Path] = None
-    var context: Option[Path] = None
     var output = Paths.get("grading/output/llm-smells.local.md")
     var model = "gpt-oss:20b-32k"
     var baseUrl = "http://127.0.0.1:11434/v1"
@@ -312,7 +303,6 @@ object AnalyzeSubmissions:
         case "--submissions" =>
           submissions = Some(Paths.get(value("--submissions")))
         case "--lab"            => lab = Some(Paths.get(value("--lab")))
-        case "--context"        => context = Some(Paths.get(value("--context")))
         case "--output"         => output = Paths.get(value("--output"))
         case "--model"          => model = value("--model")
         case "--base-url"       => baseUrl = value("--base-url")
@@ -332,7 +322,6 @@ object AnalyzeSubmissions:
         throw IllegalArgumentException("--submissions is required")
       ),
       lab.getOrElse(throw IllegalArgumentException("--lab is required")),
-      context,
       output,
       model,
       baseUrl,

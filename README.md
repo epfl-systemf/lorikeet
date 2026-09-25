@@ -115,6 +115,20 @@ scala-cli run feedback_website/GenerateFeedback.scala -- \
 
 For student-facing hosting with opaque report URLs and SQLite logging, follow the [feedback server deployment guide](feedback_server/README.md).
 
+### Discover recurring code smells with a local LLM
+
+Run an Ollama model locally; the script refuses non-loopback endpoints, so submitted source cannot be sent to a cloud model. Give it the laboratory description and optional learning-context notes, then use its local aggregate report to author Lorikeet patterns.
+
+```bash
+ollama pull qwen2.5-coder:14b
+scala-cli run grading/scripts/AnalyzeSubmissions.scala -- \
+  --submissions student-lab-submissions/2026/find \
+  --lab path/to/find-lab-description.md \
+  --context find_notes.local.md
+```
+
+The report is appended to `grading/output/llm-smells.local.md`, which is ignored. Inspect it before sharing it with any cloud service; `--dry-run` verifies the selected files without contacting the model.
+
 ### Review generated feedback
 
 Open `http://127.0.0.1:8765/generated/overview.html`, select a submission, and use Next/Back to inspect each rewrite and final observation. Review a representative sample before distribution—especially broad patterns and formatting-only changes—and update `.lorikeet.conf` rather than editing generated HTML. The editor at `http://127.0.0.1:8765/` can refine feedback text and regenerate the pages.

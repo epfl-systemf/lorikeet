@@ -30,7 +30,7 @@ object AnalyzeSubmissions:
       |  --lab PATH             laboratory description in Markdown/text (required)
       |  --context PATH         optional learning-context Markdown/text
       |  --output PATH          aggregate Markdown output (default: grading/output/llm-smells.local.md)
-      |  --model NAME           local model name (default: qwen2.5-coder:14b)
+      |  --model NAME           local model name (default: gpt-oss:20b-32k)
       |  --base-url URL         loopback OpenAI-compatible URL (default: http://127.0.0.1:11434/v1)
       |  --max-file-bytes N     skip source files larger than N bytes (default: 100000)
       |  --dry-run              append file inventory only; do not contact the model
@@ -85,19 +85,24 @@ object AnalyzeSubmissions:
       if config.dryRun then None
       else Some(OpenAISyncClient("ollama", uri"${config.baseUrl}"))
 
-    files.foreach { path =>
+    println(s"Analysing ${files.size} Scala files with ${config.model}")
+    files.zipWithIndex.foreach { (path, index) =>
       val relative = config.submissions.relativize(path).toString
       val size = Files.size(path)
+      val progress = s"[${index + 1}/${files.size}] $relative"
+      println(progress)
       if size > config.maxFileBytes then
         append(
           config.output,
           s"## `$relative`\n\nSkipped: $size bytes exceeds --max-file-bytes.\n\n"
         )
+        println(s"$progress — skipped ($size bytes)")
       else if config.dryRun then
         append(
           config.output,
           s"## `$relative`\n\nDry run: no model request made.\n\n"
         )
+        println(s"$progress — dry run")
       else
         try
           val source = Files.readString(path, UTF_8)
@@ -108,6 +113,7 @@ object AnalyzeSubmissions:
           )
           val smells = parseSmells(report, source)
           append(config.output, render(relative, smells))
+          println(s"$progress — ${smells.size} candidate smell(s)")
         catch
           case NonFatal(error) =>
             append(
@@ -115,7 +121,7 @@ object AnalyzeSubmissions:
               s"## `$relative`\n\nAnalysis failed: ${escape(error.getMessage)}\n\n"
             )
             System.err.println(
-              s"Failed to analyse $relative: ${error.getMessage}"
+              s"$progress — failed: ${error.getMessage}"
             )
     }
     println(s"Appended ${files.size} file analyses to ${config.output}")
@@ -291,7 +297,7 @@ object AnalyzeSubmissions:
     var lab: Option[Path] = None
     var context: Option[Path] = None
     var output = Paths.get("grading/output/llm-smells.local.md")
-    var model = "qwen2.5-coder:14b"
+    var model = "gpt-oss:20b-32k"
     var baseUrl = "http://127.0.0.1:11434/v1"
     var maxFileBytes = 100_000L
     var dryRun = false

@@ -4,7 +4,7 @@ Lorikeet is a Scalafix-based code quality feedback tool that lets you define cus
 
 Writing rules requires no knowledge of Scala's AST or the Scalafix API, and allows you to express complex patterns and rewrites with a simple and intuitive syntax.
 
-The included [Check.scala](grading/scripts/Check.scala) script runs custom rules over many submissions and produces feedback and summary statistics.
+The included [Check.scala](feedback/feedback_automation/scripts/Check.scala) script runs custom rules over many submissions and produces feedback and summary statistics.
 
 ## ️Supported Scala Versions
 
@@ -22,11 +22,16 @@ This repo is structured as follows:
 .
 ├── examples/                 # Example usage
 ├── extensions/               # VSCode highlighting extension for `.lorikeet.conf` files
-├── grading/                  # Student grading script & rules
+├── feedback/
+│   ├── feedback_automation/ # Student grading scripts and outputs
+│   ├── server/              # Student-facing deployment server
+│   └── website/             # Feedback page generator and review site
 ├── scaffold_projects/        # Minimal projects used to compile submissions
-├── scalafix/                 # Core logic of Lorikeet
-├── server/                   # Webapp backend
-└── webapp/                   # Webapp frontend
+├── lorikeet/                 # Scalafix rule implementation
+└── simulationUI/
+    ├── compose.yaml         # Runs both UI services
+    ├── server/              # Scala backend
+    └── webapp/              # Next.js frontend
 ```
 
 See the README in the respective subfolders for more information.
@@ -38,7 +43,7 @@ See the README in the respective subfolders for more information.
 1. Publish Lorikeet locally. Use the version printed by sbt in the target project.
 
 ```bash
-cd scalafix
+cd lorikeet
 sbt "rules3/publishLocal"
 ```
 
@@ -68,7 +73,7 @@ During rule development, set `scalafixCaching := false` so `.lorikeet.conf` edit
 
 ### Generate feedback for many submissions
 
-Use [Check.scala](grading/scripts/Check.scala) to place each submission in a clean sbt project, compile it, run Lorikeet, and collect its feedback.
+Use [Check.scala](feedback/feedback_automation/scripts/Check.scala) to place each submission in a clean sbt project, compile it, run Lorikeet, and collect its feedback.
 
 1. Create a minimal scaffold (the repository includes `scaffold_projects/find`):
 
@@ -99,7 +104,7 @@ student-lab-submissions/2026/find/
 4. Run the batch check from the repository root:
 
 ```bash
-scala-cli run grading/scripts/Check.scala
+scala-cli run feedback/feedback_automation/scripts/Check.scala
 ```
 
 Submissions that do not compile are reported and skipped by Lorikeet.
@@ -107,30 +112,17 @@ Submissions that do not compile are reported and skipped by Lorikeet.
 5. Generate and serve the offline feedback site from the timestamped grading outputs:
 
 ```bash
-scala-cli run feedback_website/GenerateFeedback.scala -- \
+scala-cli run feedback/website/GenerateFeedback.scala -- \
   --include-scalafmt --serve
 ```
 
-`Check.scala` writes original sources, per-rewrite histories, lint reports, and final diffs under `grading/output/`. The feedback generator reads that directory by default. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
+`Check.scala` writes original sources, per-rewrite histories, lint reports, and final diffs under `feedback/feedback_automation/output/`. The feedback generator reads that directory by default. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
 
-For student-facing hosting with opaque report URLs and SQLite logging, follow the [feedback server deployment guide](feedback_server/README.md).
-
-### Discover recurring code smells with a local LLM
-
-Run an Ollama model locally; the script refuses non-loopback endpoints, so submitted source cannot be sent to a cloud model. Give it the laboratory summary, then use its local aggregate report to author Lorikeet patterns.
-
-```bash
-ollama pull qwen2.5-coder:14b
-scala-cli run grading/scripts/AnalyzeSubmissions.scala -- \
-  --submissions student-lab-submissions/2026/find \
-  --lab scaffold_projects/find/LAB_SUMMARY.md
-```
-
-The report is appended to `grading/output/llm-smells.local.md`, which is ignored. Inspect it before sharing it with any cloud service; `--dry-run` verifies the selected files without contacting the model.
+For student-facing hosting with opaque report URLs and SQLite logging, follow the [feedback server deployment guide](feedback/server/README.md).
 
 ### Review generated feedback
 
-Open `http://127.0.0.1:8765/generated/overview.html`, select a submission, and use Next/Back to inspect each rewrite and final observation. Review a representative sample before distribution—especially broad patterns and formatting-only changes—and update `.lorikeet.conf` rather than editing generated HTML. The editor at `http://127.0.0.1:8765/` can refine feedback text and regenerate the pages.
+Open `http://127.0.0.1:8765/generated/overview.html`, select a submission, and use Next/Back to inspect each rewrite and final observation. Review a representative sample before distribution—especially broad patterns and formatting-only changes. Student-facing descriptions come from the `description` fields in the `.lorikeet.conf` used for grading; change those fields and rerun grading to update the feedback.
 
 ## Running the Lorikeet Webapp
 
@@ -147,7 +139,7 @@ Docker and Docker Compose installed
 From the repo root, run:
 
 ```bash
-docker compose up --build
+docker compose -f simulationUI/compose.yaml up --build
 ```
 
 This will:
@@ -161,16 +153,16 @@ The webapp is accessible at `http://localhost:3000` and will automatically proxy
 Stop the containers with:
 
 ```bash
-docker compose down
+docker compose -f simulationUI/compose.yaml down
 ```
 
 ### Hot Reload
 
 Both containers support live reload:
 
-- **Webapp**: Edit TypeScript/React files in `webapp/` and changes appear immediately in the browser
-- **Server**: Edit Scala files in `server/` and sbt will recompile on save
+- **Webapp**: Edit TypeScript/React files in `simulationUI/webapp/` and changes appear immediately in the browser
+- **Server**: Edit Scala files in `simulationUI/server/` and sbt will recompile on save
 
 ### Webapp Development
 
-Check the README in the `server` and `webapp` folders to see more about the server API endpoints or other useful information.
+Check the README in the `simulationUI/server` and `simulationUI/webapp` folders to see more about the server API endpoints or other useful information.

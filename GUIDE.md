@@ -28,6 +28,7 @@ rules = [
 - `description` (optional): A description of the rule, used for feedback messages.
 - `match-ascriptions` (optional, default: false): If true, type ascriptions in the pattern are matched syntactically rather than semantically. See Matcher section below for details.
 - `match-fqn` (optional, default: true): If true, fully qualified names in the pattern are interpreted as semantic symbol constraints rather than strict syntactic paths.
+- `match-blocks` (optional, default: false): If true, singleton blocks in the pattern must be present syntactically instead of matching a bare expression. Use this for rewrites that remove redundant braces.
 - `only-packages` (optional): If specified, restricts matching to code within the listed packages.
 
 The tool repeatedly applies one rewrite until no rule matches or `max-rewrites` is reached. It checks rules in configuration order, rewrites the first source-order match for the selected rule, then starts matching again from the first rule. Both the `pattern` and `rewrite` fields are written in Scala 3 syntax, with additional constructs for matching and rewriting.
@@ -48,6 +49,8 @@ token-rules = [{
 The Matcher structurally compares target code and query patterns (The `pattern` field of a rule). Query patterns are matched literally, except for special syntax that allows for more flexible matching, in particular it uses two main constructs: Metavariables and Pattern Blocks.
 
 A block containing exactly one expression is transparent during matching: `expression` and `{ expression }` match interchangeably. Blocks containing definitions, imports, or multiple statements remain structural because removing their scope can change the program.
+
+Set `match-blocks = true` on a rule when the presence of singleton-block braces is itself what the rule should match.
 
 ### Metavariables
 

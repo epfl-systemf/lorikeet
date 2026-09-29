@@ -6,7 +6,9 @@
 **/.scala-build
 **/target
 **/node_modules
-webapp/.next
-webapp/node_modules
+simulationUI/webapp/.next
+feedback/feedback_automation/output
+feedback/website/generated
+student-lab-submissions
 **/*.log
 **/.DS_Store

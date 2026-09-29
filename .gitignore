@@ -46,8 +46,11 @@ bin/
 *.class
 *.local.*
 __pycache__/
-feedback_website/generated/
-feedback_website/logs/
-feedback_website/*.bak
-/grading/output/
-/student-lab-submissions/2026/
+feedback/website/generated/
+feedback/website/logs/
+feedback/website/*.bak
+/feedback/feedback_automation/output/
+/student-lab-submissions/
+!/student-lab-submissions/test
+/scaffold_projects
+!/scaffold_projects/test

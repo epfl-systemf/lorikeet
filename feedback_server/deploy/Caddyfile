@@ -1,3 +1,0 @@
-feedback.example.edu {
-	reverse_proxy 127.0.0.1:8766
-}

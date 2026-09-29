@@ -18,7 +18,7 @@ jobs:
       - uses: sbt/setup-sbt@v1
       # Publish only the scalafix rule (other subprojects set publish / skip := true).
       - run: sbt ci-release
-        working-directory: scalafix
+        working-directory: lorikeet
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}

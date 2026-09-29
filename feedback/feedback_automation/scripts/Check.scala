@@ -1,4 +1,5 @@
 //> using scala 3.7.4
+//> using dep com.lihaoyi::ujson:4.4.3
 
 // --- CONFIGURATION ---
 val SCAFFOLD_DIR = "scaffold_projects/find"
@@ -33,6 +34,7 @@ object CheckTool:
       extends CheckResult
   case class CompileError(studentId: String) extends CheckResult
   case class RewriteError(studentId: String) extends CheckResult
+  case class ProcessingError(studentId: String) extends CheckResult
   case class IssuesFound(
       studentId: String,
       issues: Map[String, Int]
@@ -46,6 +48,7 @@ object CheckTool:
       historyDir: Path,
       originalDir: Path,
       lintDir: Path,
+      resultsFile: Path,
       tmpDir: Path,
       targetFiles: Seq[Path]
   )
@@ -57,6 +60,7 @@ object CheckTool:
 
   case class FileContext(
       fileName: String,
+      artifactName: String,
       labPath: Path,
       subPath: Path,
       preSnap: Path,
@@ -69,19 +73,30 @@ object CheckTool:
     val lintReport = cfg.lintDir.resolve(s"$studentId.lint.txt")
     val historyTemp = cfg.tmpDir.resolve(s"$studentId-history")
 
-    val contexts = cfg.targetFiles.map { labPath =>
-      val fileName = labPath.getFileName.toString
+    val basenames = cfg.targetFiles.map(_.getFileName.toString)
+    val contexts = cfg.targetFiles.zipWithIndex.map { (labPath, index) =>
+      val relativePath = cfg.labDir.relativize(labPath)
+      val basename = labPath.getFileName.toString
+      val duplicateName = basenames.count(_ == basename) > 1
+      val nestedPath = studentDir.resolve(relativePath)
+      val submittedPath =
+        if duplicateName || Files.isRegularFile(nestedPath) then nestedPath
+        else studentDir.resolve(basename)
+      val artifactName =
+        if duplicateName then s"$studentId-$index-$basename"
+        else s"$studentId-$basename"
       FileContext(
-        fileName = fileName,
+        fileName = relativePath.toString,
+        artifactName = artifactName,
         labPath = labPath,
-        subPath = studentDir.resolve(fileName),
-        preSnap = cfg.tmpDir.resolve(s"$studentId.pre-$fileName"),
-        postSnap = cfg.tmpDir.resolve(s"$studentId.post-$fileName")
+        subPath = submittedPath,
+        preSnap = cfg.tmpDir.resolve(s"$artifactName.pre"),
+        postSnap = cfg.tmpDir.resolve(s"$artifactName.post")
       )
     }
 
     val missing =
-      contexts.filter(ctx => !Files.exists(ctx.subPath)).map(_.fileName)
+      contexts.filter(ctx => !Files.isRegularFile(ctx.subPath)).map(_.fileName)
     if (missing.nonEmpty) then
       return logAndReturn(MissingFiles(studentId, missing))
 
@@ -97,19 +112,19 @@ object CheckTool:
         )
       }
 
-      // Compile
-      if (!compile(cfg.labDir))
-        return logAndReturn(CompileError(studentId))
-
-      // Preserve the submitted source, then format the version Lorikeet sees.
+      // Preserve the submitted source, then format before compiling so SemanticDB
+      // positions describe exactly the source Lorikeet will inspect.
       contexts.foreach { ctx =>
         Files.copy(
           ctx.labPath,
-          cfg.originalDir.resolve(s"$studentId-${ctx.fileName}"),
+          cfg.originalDir.resolve(ctx.artifactName),
           StandardCopyOption.REPLACE_EXISTING
         )
       }
-      formatCode(cfg.labDir)
+      if (formatCode(cfg.labDir) != 0)
+        return logAndReturn(CompileError(studentId))
+      if (!compile(cfg.labDir))
+        return logAndReturn(CompileError(studentId))
       contexts.foreach { ctx =>
         Files.copy(
           ctx.labPath,
@@ -119,23 +134,37 @@ object CheckTool:
       }
 
       // Linting check
-      val (_, lintOut) = runScalafix(cfg.labDir, cfg, historyTemp)
-      val rules = processLintReport(lintOut, lintReport, cfg.labDir)
+      val (scalafixExit, scalafixOutput) = runScalafix(cfg.labDir, cfg, historyTemp)
+      if (scalafixExit != 0) {
+        System.err.println(scalafixOutput)
+        return logAndReturn(ProcessingError(studentId))
+      }
       val histories = Files.list(historyTemp)
-      try
-        histories.iterator().asScala.foreach { history =>
-          Files.copy(
-            history,
-            cfg.historyDir.resolve(
-              s"$studentId-${history.getFileName}"
-            ),
-            StandardCopyOption.REPLACE_EXISTING
+      val historyFiles = try histories.iterator().asScala.toVector.sortBy(_.getFileName.toString)
+      finally histories.close()
+      if (historyFiles.size != contexts.size)
+        return logAndReturn(ProcessingError(studentId))
+      val rules = processHistoryLints(historyFiles, lintReport) ++
+        historyFiles.flatMap { history =>
+          ujson.read(Files.readString(history))("steps").arr.map(step =>
+            Rule(step("rule").str, step("description").str)
           )
         }
-      finally histories.close()
+      val bundledHistory = ujson.Obj(
+        "schemaVersion" -> 1,
+        "student" -> studentId,
+        "files" -> ujson.Arr.from(historyFiles.map(path =>
+          ujson.read(Files.readString(path))
+        ))
+      )
+      Files.writeString(
+        cfg.historyDir.resolve(s"$studentId.history.json"),
+        bundledHistory.render(indent = 2)
+      )
 
       // Apply fixes, reformat
-      formatCode(cfg.labDir)
+      if (formatCode(cfg.labDir) != 0)
+        return logAndReturn(ProcessingError(studentId))
       if (!compile(cfg.labDir))
         return logAndReturn(RewriteError(studentId))
       contexts.foreach { ctx =>
@@ -149,9 +178,7 @@ object CheckTool:
       // Compare results
       val anyChange = contexts
         .map { ctx =>
-          val diffOut = cfg.diffDir.resolve(
-            s"$studentId-${ctx.labPath.getFileName}.diff"
-          )
+          val diffOut = cfg.diffDir.resolve(ctx.artifactName + ".diff")
           diff(ctx.preSnap, ctx.postSnap, diffOut).isDefined
         }
         .contains(true)
@@ -167,7 +194,7 @@ object CheckTool:
         System.err.println(
           s"Internal error grading $studentId: ${e.getMessage}"
         )
-        CompileError(studentId)
+        logAndReturn(ProcessingError(studentId))
     } finally {
       // Cleanup submission
       contexts.foreach { ctx =>
@@ -198,10 +225,10 @@ object CheckTool:
     )
 
     val fileArgs = cfg.targetFiles.map(f => s"--files=$f").mkString(" ")
+    val historyProperty = ujson.Str(historyDir.toString).render()
     val command = Seq(
       "sbt",
-      "--client",
-      "scalafix MetaRule " + fileArgs
+      s";eval java.lang.System.setProperty(\"lorikeet.history.dir\", $historyProperty);scalafix MetaRule $fileArgs"
     )
     val exitCode = Process(
       command,
@@ -221,11 +248,33 @@ object CheckTool:
 
   def formatCode(
       labDir: Path
-  ): Unit = {
+  ): Int = {
     execCommand(
       Seq("sbt", "--client", "-Dsbt.log.noformat=true", "scalafmt"),
       labDir
     )
+  }
+
+  def processHistoryLints(
+      histories: Seq[Path],
+      reportFile: Path
+  ): Seq[Rule] = {
+    val issues = histories.flatMap { history =>
+      val value = ujson.read(Files.readString(history))
+      val path = value("file").str
+      value("lints").arr.map { lint =>
+        IssueDetail(
+          lint("rule").str,
+          lint("description").str,
+          path,
+          lint("line").num.toInt,
+          lint("column").num.toInt,
+          lint("code").str,
+          "^" * math.max(1, lint("end").num.toInt - lint("start").num.toInt)
+        )
+      }
+    }
+    writeLintReport(issues, reportFile)
   }
 
   case class LintReportItem(
@@ -323,10 +372,15 @@ object CheckTool:
         None
     }
 
-    val foundRules =
-      issueBlock.map(issue => Rule(issue.ruleName, issue.message))
+    writeLintReport(issueBlock, reportFile)
+  }
 
-    val report = issueBlock
+  private def writeLintReport(
+      issues: Seq[IssueDetail],
+      reportFile: Path
+  ): Seq[Rule] = {
+    val foundRules = issues.map(issue => Rule(issue.ruleName, issue.message))
+    val report = issues
       .groupBy( // rule name and message
         issue => (issue.ruleName, issue.message)
       )
@@ -368,6 +422,8 @@ object CheckTool:
         s"   -> ❌ ERROR:   $studentId\n"
       case RewriteError(studentId) =>
         s"   -> ❌ INVALID REWRITE: $studentId\n"
+      case ProcessingError(studentId) =>
+        s"   -> ❌ PROCESSING ERROR: $studentId\n"
       case IssuesFound(studentId, issues) =>
         s"   -> ⚠️  ISSUES:  $studentId -> ${issues
             .map { case (rule, count) => s"$rule ($count)" }
@@ -377,6 +433,24 @@ object CheckTool:
     }
     println(logMsg.trim)
     result
+  }
+
+  def writeResults(results: Seq[CheckResult], resultsFile: Path): Unit = {
+    val rows = results.map {
+      case MissingFiles(id, files) =>
+        ujson.Obj("student" -> id, "status" -> "missing_files", "files" -> ujson.Arr.from(files))
+      case CompileError(id) =>
+        ujson.Obj("student" -> id, "status" -> "compile_error")
+      case RewriteError(id) =>
+        ujson.Obj("student" -> id, "status" -> "rewrite_error")
+      case ProcessingError(id) =>
+        ujson.Obj("student" -> id, "status" -> "processing_error")
+      case IssuesFound(id, _) =>
+        ujson.Obj("student" -> id, "status" -> "issues")
+      case Success(id) =>
+        ujson.Obj("student" -> id, "status" -> "success")
+    }
+    Files.writeString(resultsFile, ujson.Arr.from(rows).render(indent = 2))
   }
 
   def diff(
@@ -455,6 +529,7 @@ object CheckTool:
       historyDir = outputRoot.resolve(s"grading_histories_$timestamp"),
       originalDir = outputRoot.resolve(s"grading_originals_$timestamp"),
       lintDir = outputRoot.resolve(s"grading_reports_$timestamp"),
+      resultsFile = outputRoot.resolve(s"grading_results_$timestamp.json"),
       tmpDir = outputRoot.resolve(".tmp"),
       targetFiles = TARGET_FILES.map(f => ROOT.resolve(SCAFFOLD_DIR).resolve(f))
     )
@@ -483,13 +558,15 @@ object CheckTool:
     val results: Seq[CheckResult] =
       studentDirs.map(dir => checkStudent(dir, cfg))
 
+    writeResults(results, cfg.resultsFile)
+
     val totalSubmissions = results.length
     val missingFiles = results.count {
       case MissingFiles(_, _) => true
       case _                  => false
     }
     val compileErrors = results.count {
-      case CompileError(_) => true
+      case CompileError(_) | ProcessingError(_) => true
       case _               => false
     }
     val rewriteErrors = results.count {

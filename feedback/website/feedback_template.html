@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       forward.disabled=busy||current===history.steps.length;
       forward.textContent=current===history.steps.length?"Complete":"Next feedback →";
       card.dataset.feedbackId=step?.id||"";
-      card.innerHTML=step?`<span class="eyebrow">${step.kind==="observation"?"Observation":"Rewrite"} ${ordinal}</span><h3>${escapeHtml(step.title)}</h3><span class="location">${escapeHtml(step.location)}</span>${step.explanation?`<p>${escapeHtml(step.explanation)}</p>`:""}${rating()}`:`<span class="eyebrow">Starting point</span><h3>Original submission</h3><p class="original-copy">Use Next feedback to step through each rewrite and then review observations on the final code.</p>`;
+      card.innerHTML=step?`<span class="eyebrow">${step.kind==="observation"?"Observation":"Rewrite"} ${ordinal}</span><h3>${escapeHtml(step.title)}</h3><span class="location">${escapeHtml(step.location)}</span>${step.explanation?`<p>${escapeHtml(step.explanation)}</p>`:""}${rating()}`:`<span class="eyebrow">Starting point</span><h3>Code before Lorikeet</h3><p class="original-copy">Use Next feedback to step through each rewrite and then review observations on the final code.</p>`;
       renderHistory();
     }
     forward.addEventListener("click",async()=>{

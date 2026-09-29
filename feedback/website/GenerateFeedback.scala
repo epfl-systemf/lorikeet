@@ -1,7 +1,6 @@
 //> using scala 3.7.4
 //> using dep com.lihaoyi::ujson:4.4.3
 //> using test.dep org.scalameta::munit:1.3.6
-//> using file FeedbackParsing.scala
 //> using file FeedbackFiles.scala
 //> using file FeedbackReview.scala
 
@@ -25,7 +24,6 @@ final case class GeneratorConfig(
     run: Option[String],
     publishLab: Option[String],
     deploymentRoot: Path,
-    includeScalafmt: Boolean,
     serve: Boolean,
     port: Int
 )
@@ -49,197 +47,84 @@ final case class OverviewEntry(
     run: String,
     counts: Map[String, Int]
 )
+final case class SubmissionResult(submission: String, run: String, status: String)
 object GenerateFeedback:
   private val LabName = raw"[A-Za-z0-9][A-Za-z0-9_-]{0,63}".r
 
-  def parseLint(text: String): Seq[LintIssue] = FeedbackParsing.parseLint(text)
-  def parseDiff(text: String): (Map[Int, String], Seq[DiffBlock]) =
-    FeedbackParsing.parseDiff(text)
   def startReviewServer(config: GeneratorConfig): RunningReviewServer =
     FeedbackReview.startReviewServer(config)
 
-  private def fallbackHistory(
-      path: String,
-      lines: Map[Int, String],
-      blocks: Seq[DiffBlock],
-      issues: Seq[LintIssue]
-  ): ujson.Obj =
-    val source = mutable.ArrayBuffer.empty[String]
-    var previous: Option[Int] = None
-    lines.toSeq.sortBy(_._1).foreach { (number, code) =>
-      if previous.exists(number > _ + 1) then source += "// … lines omitted …"
-      source += code
-      previous = Some(number)
-    }
-    val initial = source.mkString("\n")
-    var code = initial
-    val steps = blocks.flatMap { block =>
-      val before = block.before.mkString("\n")
-      val after = block.after.mkString("\n")
-      val start = if before.nonEmpty then code.indexOf(before) else code.length
-      if start < 0 then None
-      else
-        val issue = issues.find(issue =>
-          issue.line >= block.start && issue.line < block.start + math.max(
-            1,
-            block.before.length
-          )
-        )
-        code = code.take(start) + after + code.drop(start + before.length)
-        Some(
-          ujson.Obj(
-            "rule" -> issue.fold("Rewrite")(_.name),
-            "description" -> issue.fold("")(_.message),
-            "start" -> start,
-            "end" -> (start + before.length),
-            "line" -> block.start,
-            "column" -> 1,
-            "before" -> before,
-            "after" -> after,
-            "code" -> code
-          )
-        )
-    }
-    ujson.Obj(
-      "schemaVersion" -> 1,
-      "file" -> path,
-      "limit" -> steps.length,
-      "truncated" -> false,
-      "initial" -> initial,
-      "steps" -> ujson.Arr(steps*)
-    )
-
-  private def sameFile(left: String, right: String): Boolean =
-    val leftParts = Paths.get(left).iterator.asScala.map(_.toString).toSeq
-    val rightParts = Paths.get(right).iterator.asScala.map(_.toString).toSeq
-    val (shorter, longer) =
-      if leftParts.length <= rightParts.length then (leftParts, rightParts)
-      else (rightParts, leftParts)
-    longer.takeRight(shorter.length) == shorter
-
-  private def locateIssue(code: String, issue: LintIssue): Option[(Int, Int)] =
-    val needle = issue.code.trim
-    var offset = 0
-    val matches = mutable.ArrayBuffer.empty[(Int, Int, Int)]
-    code
-      .split("(?<=\\n)", -1)
-      .toSeq
-      .filterNot(line => line.isEmpty && offset == code.length)
-      .zipWithIndex
-      .foreach { (line, index) =>
-        val content = line.stripSuffix("\n").stripSuffix("\r")
-        if content.trim == needle then
-          val start =
-            offset + content.length - content.dropWhile(_.isWhitespace).length
-          matches += ((
-            math.abs(index + 1 - issue.line),
-            start,
-            offset + content.length
-          ))
-        offset += line.length
-      }
-    matches.sortBy(_._1).headOption.map(value => (value._2, value._3))
-
-  private def addScalafmtStep(history: ujson.Obj, original: String): Unit =
-    val formatted = history("initial").str
-    if original != formatted then
-      var start = 0
-      while start < math.min(original.length, formatted.length) && original(
-          start
-        ) == formatted(start)
-      do start += 1
-      var suffix = 0
-      while suffix < original.length - start && suffix < formatted.length - start &&
-        original(original.length - suffix - 1) == formatted(
-          formatted.length - suffix - 1
-        )
-      do suffix += 1
-      val originalEnd = original.length - suffix
-      val formattedEnd = formatted.length - suffix
-      val lineStart = original.lastIndexOf('\n', math.max(0, start - 1)) + 1
-      history.value("initial") = ujson.Str(original)
-      history("steps").arr.insert(
-        0,
-        ujson.Obj(
-          "rule" -> "Scalafmt",
-          "description" -> "Format the submitted Scala source",
-          "start" -> start,
-          "end" -> originalEnd,
-          "line" -> (original.take(start).count(_ == '\n') + 1),
-          "column" -> (start - lineStart + 1),
-          "before" -> original.slice(start, originalEnd),
-          "after" -> formatted.slice(start, formattedEnd),
-          "code" -> formatted
-        )
-      )
-
   def buildReport(
-      report: Path,
+      result: SubmissionResult,
       data: Path,
       template: String,
-      includeScalafmt: Boolean = false,
       publicId: Option[String] = None,
       websiteDir: Path = Paths.get("feedback/website")
   ): ReportPage =
-    val issues = parseLint(read(report))
-    val run =
-      report.getParent.getFileName.toString.stripPrefix("grading_reports_")
-    val submission = report.getFileName.toString.stripSuffix(".lint.txt")
-    val root = report.getParent.getParent
-    val historyDir = root.resolve("grading_histories_" + run)
-    val histories = list(historyDir)
-      .filter(path =>
-        val name = path.getFileName.toString
-        name.startsWith(submission + "-") && name.endsWith(".history.json")
+    val submission = result.submission
+    val run = result.run
+    val filename = publicId.fold(
+      sanitize(run + "-" + submission) + "-" +
+        sha256(run + "/" + submission).take(8) + ".html"
+    )(_.split('/').last + ".html")
+    val header =
+      s"""<header class="page-header"><div><h1>CS-214 Code Quality Feedback</h1><p>Step through suggested rewrites and lints about your code</p></div><div class="run-label">${escape(submission)}</div></header>"""
+    val failure = result.status match
+      case "missing_files" => Some("We couldn't process your submission: a required file was missing.")
+      case "compile_error" => Some("We couldn't process your submission: it did not compile.")
+      case "rewrite_error" => Some("We couldn't process your submission: the rewritten code did not compile.")
+      case "processing_error" => Some("We couldn't process your submission: a processing error occurred.")
+      case "issues" | "success" => None
+      case other => throw IllegalArgumentException("Unknown result status: " + other)
+    if failure.nonEmpty then
+      val main =
+        s"""<main class="shell">$header<section class="empty-state"><h2>Feedback unavailable</h2><p>${escape(failure.get)}</p></section></main>"""
+      return ReportPage(
+        filename,
+        submission,
+        renderDocument(template, submission, main, interactive = false),
+        0,
+        Map.empty
       )
-      .map { path =>
-        val history = ujson.read(read(path)) match
+
+    val historyDir = data.resolve("grading_histories_" + run)
+    val historyPath = historyDir.resolve(submission + ".history.json")
+    if !Files.isRegularFile(historyPath) then
+      throw IllegalArgumentException(
+        s"Missing rewrite history for $submission in run $run"
+      )
+    val bundle = ujson.read(read(historyPath))
+    if bundle("schemaVersion").num != 1 ||
+      bundle("student").str != submission then
+      throw IllegalArgumentException("Invalid student history: " + historyPath)
+    val histories = bundle("files").arr.map { rawHistory =>
+        val history = rawHistory match
           case objectValue: ujson.Obj => objectValue
           case _                      =>
-            throw IllegalArgumentException("Invalid rewrite history: " + path)
+            throw IllegalArgumentException("Invalid rewrite history: " + historyPath)
         if history.value.get("schemaVersion").forall(_.num != 1) ||
           !history.value.get("initial").exists(_.isInstanceOf[ujson.Str]) ||
-          !history.value.get("steps").exists(_.isInstanceOf[ujson.Arr])
-        then throw IllegalArgumentException("Invalid rewrite history: " + path)
-        if includeScalafmt then
-          val original = root
-            .resolve("grading_originals_" + run)
-            .resolve(
-              submission + "-" + Paths.get(history("file").str).getFileName
-            )
-          if !Files.isRegularFile(original) then
-            throw IllegalArgumentException(
-              "Missing original source for Scalafmt step: " + original
-            )
-          addScalafmtStep(history, read(original))
+          !history.value.get("steps").exists(_.isInstanceOf[ujson.Arr]) ||
+          !history.value.get("lints").exists(_.isInstanceOf[ujson.Arr]) ||
+          history.value.get("truncated").exists(_.bool)
+        then throw IllegalArgumentException("Invalid rewrite history: " + historyPath)
+        var code = history("initial").str
+        history("steps").arr.foreach { step =>
+          val start = step("start").num.toInt
+          val end = step("end").num.toInt
+          if start < 0 || end < start || end > code.length ||
+            code.slice(start, end) != step("before").str ||
+            step("code").str != code.take(start) + step("after").str + code.drop(end)
+          then throw IllegalArgumentException("Invalid rewrite transition: " + historyPath)
+          code = step("code").str
+        }
         history
       }
       .to(mutable.ArrayBuffer)
-
-    val paths = issues.map(_.path).distinct.sorted
-    histories.foreach { history =>
-      paths.find(path => sameFile(path, history("file").str)).foreach { path =>
-        history.value("file") = ujson.Str(path)
-      }
-    }
-    val diffDir = root.resolve("grading_diffs_" + run)
-    paths.foreach { path =>
-      if !histories.exists(history => sameFile(path, history("file").str)) then
-        val basename = Paths.get(path).getFileName.toString
-        val diff = diffDir.resolve(submission + "-" + basename + ".diff")
-        val (originalLines, blocks) =
-          if Files.isRegularFile(diff) && paths.count(p =>
-              Paths.get(p).getFileName.toString == basename
-            ) == 1
-          then parseDiff(read(diff))
-          else (Map.empty[Int, String], Seq.empty[DiffBlock])
-        val lines = mutable.TreeMap.from(originalLines)
-        val fileIssues = issues.filter(_.path == path)
-        fileIssues.foreach(issue =>
-          lines.getOrElseUpdate(issue.line, issue.code)
-        )
-        histories += fallbackHistory(path, lines.toMap, blocks, fileIssues)
-    }
+    if histories.isEmpty then
+      throw IllegalArgumentException(
+        s"Missing rewrite history for $submission in run $run"
+      )
 
     val feedbackItems = mutable.LinkedHashMap.empty[String, FeedbackItem]
     var rewriteNumber = 0
@@ -267,43 +152,39 @@ object GenerateFeedback:
       }
     }
 
-    val seen = mutable.Set.empty[(String, String)]
     var observationNumber = 0
-    issues.foreach { issue =>
-      histories
-        .find(history => sameFile(issue.path, history("file").str))
-        .foreach { history =>
-          val key = (issue.name, history("file").str)
-          val alreadyRewritten =
-            history("steps").arr.exists(_("rule").str == issue.name)
-          if !seen(key) && !alreadyRewritten then
-            seen += key
-            val steps = history("steps").arr
-            val finalCode =
-              steps.lastOption.fold(history("initial").str)(_("code").str)
-            locateIssue(finalCode, issue).foreach { (start, end) =>
-              val id = "observation-" + observationNumber
-              observationNumber += 1
-              steps += ujson.Obj(
-                "kind" -> "observation",
-                "id" -> id,
-                "rule" -> issue.name,
-                "description" -> issue.message,
-                "title" -> issue.name,
-                "explanation" -> issue.message,
-                "location" -> s"${issue.path}:${issue.line}:${issue.column}",
-                "start" -> start,
-                "end" -> end,
-                "line" -> issue.line,
-                "column" -> issue.column,
-                "before" -> issue.code.trim,
-                "after" -> issue.code.trim,
-                "code" -> finalCode
-              )
-              feedbackItems(id) =
-                FeedbackItem(issue.name, issue.path, issue.line, issue.column)
-            }
-        }
+    histories.foreach { history =>
+      val steps = history("steps").arr
+      val finalCode = steps.lastOption.fold(history("initial").str)(_("code").str)
+      history("lints").arr.foreach { lint =>
+        val start = lint("start").num.toInt
+        val end = lint("end").num.toInt
+        if start < 0 || end < start || end > finalCode.length then
+          throw IllegalArgumentException("Invalid final lint in " + history("file").str)
+        val id = "observation-" + observationNumber
+        observationNumber += 1
+        val rule = lint("rule").str
+        val file = history("file").str
+        val line = lint("line").num.toInt
+        val column = lint("column").num.toInt
+        steps += ujson.Obj(
+          "kind" -> "observation",
+          "id" -> id,
+          "rule" -> rule,
+          "description" -> lint("description").str,
+          "title" -> rule,
+          "explanation" -> lint("description").str,
+          "location" -> s"$file:$line:$column",
+          "start" -> start,
+          "end" -> end,
+          "line" -> line,
+          "column" -> column,
+          "before" -> finalCode.slice(start, end),
+          "after" -> finalCode.slice(start, end),
+          "code" -> finalCode
+        )
+        feedbackItems(id) = FeedbackItem(rule, file, line, column)
+      }
     }
 
     val visibleHistories = histories.filter(_("steps").arr.nonEmpty).toSeq
@@ -322,19 +203,10 @@ object GenerateFeedback:
     val empty =
       if visibleHistories.nonEmpty then ""
       else
-        "<section class=\"empty-state\"><h2>No feedback</h2><p>No configured pattern matched this submission.</p></section>"
-    val title = submission + " · " + run
+        "<section class=\"empty-state\"><h2>No feedback</h2><p>We didn't match any code-quality improvement patterns on your submission. Until next time.</p></section>"
+    val title = submission
     val main =
-      s"""<main class="shell"><header class="page-header"><div><span class="eyebrow">Lorikeet feedback</span><h1>See your code evolve</h1><p>Step through rewrites, then review observations on the final code.</p></div><div class="run-label">${escape(
-          submission
-        )}<span>${escape(run)}</span></div></header>$timelines$empty</main>"""
-
-    val relative = data.relativize(report).iterator.asScala.mkString("/")
-    val filename = publicId.fold(
-      sanitize(run + "-" + submission) + "-" + sha256(relative).take(
-        8
-      ) + ".html"
-    )(_.split('/').last + ".html")
+      s"""<main class="shell">$header$timelines$empty</main>"""
     val metadataIssues = mutable.LinkedHashMap.empty[String, ujson.Value]
     feedbackItems.foreach { (id, item) =>
       metadataIssues(id) = ujson.Obj(
@@ -389,50 +261,46 @@ object GenerateFeedback:
       "<style>table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:14px 16px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}tbody tr:last-child td{border-bottom:0}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}</style></head>"
     )
 
-  def reportFiles(config: GeneratorConfig): Seq[Path] =
-    val reports = Using.resource(Files.walk(config.data)) { paths =>
-      paths.iterator.asScala
-        .filter(Files.isRegularFile(_))
-        .filter(_.getFileName.toString.endsWith(".lint.txt"))
-        .filter(_.getParent.getFileName.toString.startsWith("grading_reports_"))
-        .filter(path =>
-          config.run.forall(run =>
-            path.getParent.getFileName.toString == "grading_reports_" + run
-          )
-        )
-        .toSeq
-        .sortBy(_.toString)
+  def submissionResults(config: GeneratorConfig): Seq[SubmissionResult] =
+    val manifests = list(config.data).filter { path =>
+      val name = path.getFileName.toString
+      name.startsWith("grading_results_") && name.endsWith(".json") &&
+      config.run.forall(run => name == s"grading_results_$run.json")
     }
-    if reports.isEmpty then
+    if manifests.isEmpty then
       val suffix = config.run.fold("")(run => " for run " + run)
       throw IllegalArgumentException(
-        s"No grading reports found under ${config.data}$suffix"
+        s"No grading results found under ${config.data}$suffix"
       )
-    reports
+    manifests.flatMap { manifest =>
+      val run = manifest.getFileName.toString
+        .stripPrefix("grading_results_").stripSuffix(".json")
+      ujson.read(read(manifest)).arr.map { row =>
+        SubmissionResult(row("student").str, run, row("status").str)
+      }
+    }.sortBy(result => (result.run, result.submission))
 
   def generate(config: GeneratorConfig): Unit =
     val template = read(config.template)
-    val reports = reportFiles(config)
+    val results = submissionResults(config)
     config.publishLab match
-      case Some(lab) => publish(config, lab, template, reports)
+      case Some(lab) => publish(config, lab, template, results)
       case None      =>
-        val pages = reports.map(report =>
-          report -> buildReport(
-            report,
+        val pages = results.map(result =>
+          result -> buildReport(
+            result,
             config.data,
             template,
-            config.includeScalafmt,
             websiteDir = config.template.toAbsolutePath.normalize().getParent
           )
         )
         Files.createDirectories(config.output)
-        val entries = pages.map { (report, page) =>
+        val entries = pages.map { (result, page) =>
           write(config.output.resolve(page.filename), page.page)
           OverviewEntry(
             page.filename,
-            report.getFileName.toString.stripSuffix(".lint.txt"),
-            report.getParent.getFileName.toString
-              .stripPrefix("grading_reports_"),
+            result.submission,
+            result.run,
             page.counts
           )
         }
@@ -451,7 +319,7 @@ object GenerateFeedback:
       config: GeneratorConfig,
       lab: String,
       template: String,
-      reports: Seq[Path]
+      results: Seq[SubmissionResult]
   ): Unit =
     if !LabName.matches(lab) then
       throw IllegalArgumentException(
@@ -468,16 +336,15 @@ object GenerateFeedback:
     Files.createDirectories(manifests)
     val temporary = Files.createTempDirectory(publicRoot, "." + lab + "-")
     try
-      val rows = reports
-        .map { report =>
-          val submission = report.getFileName.toString.stripSuffix(".lint.txt")
+      val rows = results
+        .map { result =>
+          val submission = result.submission
           val token = hmac(secret, lab + "\u0000" + submission)
           val publicId = lab + "/" + token
           val page = buildReport(
-            report,
+            result,
             config.data,
             template,
-            config.includeScalafmt,
             Some(publicId),
             config.template.toAbsolutePath.normalize().getParent
           )
@@ -616,7 +483,6 @@ object GenerateFeedbackMain:
     |  --run TIMESTAMP          select one grading run
     |  --publish-lab NAME       publish opaque student URLs for one lab
     |  --deployment-root PATH   deployment output root
-    |  --include-scalafmt       include formatting as rewrite zero
     |  --serve                  start the local review server
     |  --port NUMBER            local review server port
     |""".stripMargin
@@ -633,7 +499,6 @@ object GenerateFeedbackMain:
       run = None,
       publishLab = None,
       deploymentRoot = grading.resolve("deployment"),
-      includeScalafmt = false,
       serve = false,
       port = 8765
     )
@@ -660,8 +525,6 @@ object GenerateFeedbackMain:
           config = config.copy(deploymentRoot =
             Paths.get(argument("--deployment-root"))
           )
-        case "--include-scalafmt" =>
-          config = config.copy(includeScalafmt = true)
         case "--serve" => config = config.copy(serve = true)
         case "--port"  => config = config.copy(port = argument("--port").toInt)
         case "--help" | "-h" =>

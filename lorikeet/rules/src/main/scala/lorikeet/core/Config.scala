@@ -95,6 +95,7 @@ object Config:
         rule.name,
         matchTree,
         rewriteTree,
+        rule.rewrite,
         matchOptions,
         rule.description
       )
@@ -134,7 +135,7 @@ object Config:
             )
 
   def parseSource(code: String, filename: String): Source =
-    val input = Input.VirtualFile(filename, code)
+    val input = new scala.meta.inputs.Input.VirtualFile(filename, code)
     given scala.meta.Dialect = scala.meta.dialects.Scala3
     input.parse[Source] match
       case Parsed.Success(t) => t

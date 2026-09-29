@@ -6,78 +6,97 @@ import java.time.Instant
 import java.util.UUID
 
 class GenerateFeedbackTest extends munit.FunSuite:
-  test("recovers legacy diffs with trimmed blank context") {
-    val (original, blocks) = GenerateFeedback.parseDiff(
-      "--- before\n+++ after\n@@ -1,2 +1,2 @@\n-old\n+new"
-    )
-    assertEquals(original, Map(1 -> "old", 2 -> ""))
-    assertEquals(blocks, Seq(DiffBlock(1, Seq("old"), Seq("new"))))
-    interceptMessage[IllegalArgumentException]("Truncated diff hunk") {
-      GenerateFeedback.parseDiff(
-        "--- before\n+++ after\n@@ -1,2 +1,2 @@\n-old\n+new\n"
-      )
-    }
-  }
-
   test("generates, publishes, serves, and logs feedback") {
     val root = Files.createTempDirectory("feedback-generator-test")
-    val reports = Files.createDirectories(root.resolve("grading_reports_demo"))
     val histories =
       Files.createDirectories(root.resolve("grading_histories_demo"))
-    val originals =
-      Files.createDirectories(root.resolve("grading_originals_demo"))
-    val report = reports.resolve("student-0.lint.txt")
+    val original = (1 to 40).map(i => s"val line$i = $i").mkString("\n")
+    val before = (10 to 30).map(i => s"val line$i = $i").mkString("\n")
+    val after = (10 to 30).map(i => s"val line$i = ${i + 1}").mkString("\n")
+    val rewritten = original.replace(before, after)
+    val start = original.indexOf(before)
+    val firstFile = ujson.Obj(
+      "schemaVersion" -> 1,
+      "file" -> "src/Sample.scala",
+      "limit" -> 10,
+      "truncated" -> false,
+      "initial" -> original,
+      "steps" -> ujson.Arr(ujson.Obj(
+        "rule" -> "Rewrite",
+        "description" -> "rewrite it",
+        "start" -> start,
+        "end" -> (start + before.length),
+        "line" -> 10,
+        "column" -> 1,
+        "before" -> before,
+        "after" -> after,
+        "code" -> rewritten
+      )),
+      "lints" -> ujson.Arr(ujson.Obj(
+        "rule" -> "Var Usage",
+        "description" -> "avoid mutation",
+        "start" -> 0,
+        "end" -> 3,
+        "line" -> 1,
+        "column" -> 1,
+        "code" -> "val line1 = 1"
+      ))
+    )
+    val secondFile = ujson.Obj(
+      "schemaVersion" -> 1,
+      "file" -> "src/Other.scala",
+      "limit" -> 10,
+      "truncated" -> false,
+      "initial" -> "val answer = 0",
+      "steps" -> ujson.Arr(ujson.Obj(
+        "rule" -> "Second Rewrite",
+        "description" -> "replace zero",
+        "start" -> 13,
+        "end" -> 14,
+        "line" -> 1,
+        "column" -> 14,
+        "before" -> "0",
+        "after" -> "1",
+        "code" -> "val answer = 1"
+      )),
+      "lints" -> ujson.Arr()
+    )
     Files.writeString(
-      report,
-      """[Rewrite]
-        |rewrite it (1 occurrences)
-        |
-        |src/Sample.scala:1:1
-        |if ready then true else false
-        |^
-        |
-        |[Var Usage]
-        |avoid mutation (2 occurrences)
-        |
-        |src/Sample.scala:2:1
-        |var found = false
-        |^
-        |
-        |src/Sample.scala:3:1
-        |var current = false
-        |^
-        |""".stripMargin,
+      histories.resolve("student-0.history.json"),
+      ujson.Obj(
+        "schemaVersion" -> 1,
+        "student" -> "student-0",
+        "files" -> ujson.Arr(firstFile, secondFile)
+      ).render(indent = 2),
       UTF_8
     )
     Files.writeString(
-      histories.resolve("student-0-a.history.json"),
-      ujson
-        .Obj(
-          "schemaVersion" -> 1,
-          "file" -> "src/Sample.scala",
-          "limit" -> 10,
-          "truncated" -> false,
-          "initial" -> "if ready then true else false\nvar found = false\nvar current = false",
-          "steps" -> ujson.Arr(
-            ujson.Obj(
-              "rule" -> "Rewrite",
-              "description" -> "rewrite it",
-              "start" -> 0,
-              "end" -> 29,
-              "line" -> 1,
-              "column" -> 1,
-              "before" -> "if ready then true else false",
-              "after" -> "ready",
-              "code" -> "ready\nvar found = false\nvar current = false"
-            )
-          )
-        )
-        .render(indent = 2),
+      root.resolve("grading_results_demo.json"),
+      ujson.Arr(
+        ujson.Obj("student" -> "student-0", "status" -> "issues"),
+        ujson.Obj("student" -> "student-1", "status" -> "success"),
+        ujson.Obj("student" -> "student-2", "status" -> "missing_files"),
+        ujson.Obj("student" -> "student-3", "status" -> "compile_error"),
+        ujson.Obj("student" -> "student-4", "status" -> "rewrite_error"),
+        ujson.Obj("student" -> "student-5", "status" -> "processing_error")
+      ).render(),
       UTF_8
     )
     Files.writeString(
-      originals.resolve("student-0-Sample.scala"),
-      "if  ready then true else false\nvar found=false\nvar current=false",
+      histories.resolve("student-1.history.json"),
+      ujson.Obj(
+        "schemaVersion" -> 1,
+        "student" -> "student-1",
+        "files" -> ujson.Arr(ujson.Obj(
+        "schemaVersion" -> 1,
+        "file" -> "src/NoMatches.scala",
+        "limit" -> 10,
+        "truncated" -> false,
+        "initial" -> "object NoMatches",
+        "steps" -> ujson.Arr(),
+        "lints" -> ujson.Arr()
+        ))
+      ).render(),
       UTF_8
     )
 
@@ -92,20 +111,15 @@ class GenerateFeedbackTest extends munit.FunSuite:
       run = Some("demo"),
       publishLab = None,
       deploymentRoot = root.resolve("deployment"),
-      includeScalafmt = true,
       serve = false,
       port = 0
     )
 
     GenerateFeedback.generate(config)
-    val page = Files
-      .list(output)
-      .filter(_.toString.endsWith(".html"))
-      .toArray
-      .map(_.asInstanceOf[Path])
-      .find(_.getFileName.toString != "overview.html")
-      .get
-    val html = Files.readString(page)
+    val html = Files.readString(
+      Files.list(output).toArray.map(_.asInstanceOf[Path])
+        .find(_.getFileName.toString.contains("student-0")).get
+    )
     val payload = ujson.read(
       "(?s)<script type=\"application/json\" id=\"timeline-data\">(.*?)</script>".r
         .findFirstMatchIn(html)
@@ -113,15 +127,32 @@ class GenerateFeedbackTest extends munit.FunSuite:
         .group(1)
     )
     val steps = payload("histories")(0)("steps").arr
+    assertEquals(payload("histories").arr.size, 2)
+    assertEquals(payload("histories")(1)("file").str, "src/Other.scala")
+    assertEquals(payload("histories")(1)("steps")(0)("rule").str, "Second Rewrite")
+    assertEquals(payload("histories")(1)("steps")(0)("id").str, "rewrite-1")
     assertEquals(
       steps.map(_("kind").str).toSeq,
-      Seq("rewrite", "rewrite", "observation")
+      Seq("rewrite", "observation")
     )
     assertEquals(steps.count(_("rule").str == "Var Usage"), 1)
-    assertEquals(steps(1)("explanation").str, "rewrite it")
-    assertEquals(steps(2)("explanation").str, "avoid mutation")
+    assertEquals(steps(0)("explanation").str, "rewrite it")
+    assertEquals(steps(1)("explanation").str, "avoid mutation")
+    assertEquals(steps(0)("code").str, rewritten)
+    assert(steps(0)("before").str.linesIterator.size > 5)
+    assert(steps(0)("after").str.contains("val line30 = 31"))
+    assert(html.contains("val line40 = 40"))
+    assert(!html.contains("lines omitted"))
     assert(html.contains("codeView.scrollTop=previousTop;"))
     assert(html.contains("data-expand-${direction}"))
+    def localPage(student: String): String =
+      Files.readString(Files.list(output).toArray.map(_.asInstanceOf[Path])
+        .find(_.getFileName.toString.contains(student)).get)
+    assert(localPage("student-1").contains("We didn't match any code-quality improvement patterns"))
+    assert(localPage("student-2").contains("a required file was missing"))
+    assert(localPage("student-3").contains("it did not compile"))
+    assert(localPage("student-4").contains("the rewritten code did not compile"))
+    assert(localPage("student-5").contains("a processing error occurred"))
 
     val publishConfig = config.copy(
       publishLab = Some("find-2026"),
@@ -129,7 +160,10 @@ class GenerateFeedbackTest extends munit.FunSuite:
     )
     GenerateFeedback.generate(publishConfig)
     val manifest = root.resolve("deployment/private/links/find-2026.csv")
+    assertEquals(Files.readAllLines(manifest, UTF_8).size(), 7)
     val link = Files.readAllLines(manifest, UTF_8).get(1).split(",", 2)(1)
+    assert(link.startsWith("/r/find-2026/"))
+    assert(!link.contains("student-0"))
     val published = root
       .resolve("deployment/public/find-2026")
       .resolve(link.split('/').last + ".html")

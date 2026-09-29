@@ -47,19 +47,7 @@ case class Matcher()(using
       bindings: Bindings,
       allowFqn: Boolean = true
   ): MatchResult =
-    (pat, cand) match
-      case (
-            Term.Block(List(patTerm: Term)),
-            Term.Block(List(candTerm: Term))
-          ) if !matchOptions.matchBlocks =>
-        compareTrees(patTerm, candTerm, bindings, allowFqn)
-      case (Term.Block(List(patTerm: Term)), candTerm: Term)
-          if !matchOptions.matchBlocks =>
-        compareTrees(patTerm, candTerm, bindings, allowFqn)
-      case (patTerm: Term, Term.Block(List(candTerm: Term)))
-          if !matchOptions.matchBlocks =>
-        compareTrees(patTerm, candTerm, bindings, allowFqn)
-      case _ => compareTreeShapes(pat, cand, bindings, allowFqn)
+    compareTreeShapes(pat, cand, bindings, allowFqn)
 
   private def compareTreeShapes(
       pat: Tree,

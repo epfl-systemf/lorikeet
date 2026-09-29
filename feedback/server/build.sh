@@ -6,7 +6,7 @@ deployment_root=${LORIKEET_DEPLOYMENT_ROOT:-"$repo_root/feedback/feedback_automa
 mkdir -p "$deployment_root/bin"
 
 scala-cli --power package "$repo_root/feedback/server/FeedbackServer.scala" \
-  --assembly --force --main-class FeedbackServerMain \
+  --assembly --force --server=false --main-class FeedbackServerMain \
   -o "$deployment_root/bin/feedback-server.jar"
 
 echo "Built $deployment_root/bin/feedback-server.jar"

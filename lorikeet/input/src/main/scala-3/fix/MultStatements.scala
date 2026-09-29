@@ -5,6 +5,11 @@ package fix
 package multstatements
 
 object MultStatements:
+  def keepStatementBeforeMult(n: Int): Int = {
+    println("begin")
+    n + 1
+  }
+
   def sum(x: Int, y: Int): Int = {
     println("debug: added values")
     x + y

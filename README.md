@@ -89,6 +89,14 @@ scaffold_projects/find/
 
 Use the sbt/Scalafix setup above, point `build.sbt` at the locally published Lorikeet version, and put assignment-specific rules in `.lorikeet.conf`. The batch script creates the target source directories and removes each copied submission after checking it.
 
+The included `find` scaffold pins Lorikeet `0.1.0`. Before grading with it, publish the current local rules under that version from the repository root:
+
+```bash
+cd lorikeet
+sbt 'set ThisBuild / version := "0.1.0"' 'rules3/publishLocal'
+cd ..
+```
+
 2. Put each submission directly under its student directory. Each submitted filename must match the basename of its configured target:
 
 ```tree
@@ -99,7 +107,7 @@ student-lab-submissions/2026/find/
     └── find.scala
 ```
 
-3. Set `SCAFFOLD_DIR`, `SUBMISSIONS_DIR`, and `TARGET_FILES` at the top of `Check.scala`. Paths are relative to the repository root; `TARGET_FILES` are paths inside the scaffold.
+3. Set `SCAFFOLD_DIR`, `SUBMISSIONS_DIR`, and `TARGET_FILES` at the top of `Check.scala`. Paths are relative to the repository root; `TARGET_FILES` are paths inside the scaffold. For multiple target files with the same basename, each student directory must mirror their scaffold-relative paths (for example, `src/main/scala/a/Main.scala` and `src/main/scala/b/Main.scala`). Unique basenames can still be submitted flat.
 
 4. Run the batch check from the repository root:
 
@@ -113,10 +121,10 @@ Submissions that do not compile are reported and skipped by Lorikeet.
 
 ```bash
 scala-cli run feedback/website/GenerateFeedback.scala -- \
-  --include-scalafmt --serve
+  --serve
 ```
 
-`Check.scala` writes original sources, per-rewrite histories, lint reports, and final diffs under `feedback/feedback_automation/output/`. The feedback generator reads that directory by default. `--include-scalafmt` exposes the initial formatting pass as rewrite 0; omit it if that step is not useful.
+`Check.scala` writes results, original sources, per-rewrite histories, lint reports, and final diffs under `feedback/feedback_automation/output/`. The feedback generator reads that directory by default. The history starts with the formatted source Lorikeet sees; each following snapshot applies one rule, then final lints are collected.
 
 For student-facing hosting with opaque report URLs and SQLite logging, follow the [feedback server deployment guide](feedback/server/README.md).
 

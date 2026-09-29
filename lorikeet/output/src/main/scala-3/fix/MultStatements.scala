@@ -2,6 +2,10 @@ package fix
 package multstatements
 
 object MultStatements:
+  def keepStatementBeforeMult(n: Int): Int = {
+    n + 1
+  }
+
   def sum(x: Int, y: Int): Int = {
     x + y
   }

@@ -12,10 +12,9 @@ run=$2
 data=${3:-"$repo_root/feedback/feedback_automation/output"}
 deployment_root=${LORIKEET_DEPLOYMENT_ROOT:-"$repo_root/feedback/feedback_automation/output/deployment"}
 
-scala-cli run "$repo_root/feedback/website/GenerateFeedback.scala" -- \
+scala-cli run "$repo_root/feedback/website/GenerateFeedback.scala" --server=false -- \
   --data "$data" \
   --template "$repo_root/feedback/website/feedback_template.html" \
   --run "$run" \
   --publish-lab "$lab" \
-  --deployment-root "$deployment_root" \
-  --include-scalafmt
+  --deployment-root "$deployment_root"

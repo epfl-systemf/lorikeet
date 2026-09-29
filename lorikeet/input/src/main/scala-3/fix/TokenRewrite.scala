@@ -8,3 +8,9 @@ object TokenRewrite:
   val text = "oldName;"
   // oldName;
   val result = oldName;
+  val plainTrue = true
+  val plainFalse = false
+  val negatedTrue = !true
+  val negatedFalse = !false
+  val quotedNegation = "!true"
+  // !false

@@ -18,6 +18,7 @@ case class RuleConfig(
 case class TokenRuleConfig(
     name: String,
     onlyPackages: Option[List[String]],
+    targetKind: Option[String],
     description: Option[String],
     pattern: String,
     rewrite: Option[String]
@@ -114,6 +115,11 @@ object Config:
         pattern,
         rule.rewrite,
         rule.onlyPackages,
+        rule.targetKind.map { kind =>
+          if !Set("parameter", "function", "value", "function-argument").contains(kind) then
+            throw new Exception(s"Unknown target-kind '$kind' in rule '${rule.name}'")
+          kind
+        },
         rule.description
       )
     }

@@ -68,6 +68,8 @@ find feedback/feedback_automation/output -maxdepth 1 -type f -name 'grading_resu
 
 The arguments are the public lab name and the timestamp suffix of `grading_results_<timestamp>.json`. An optional third argument replaces the default `feedback/feedback_automation/output` input directory. The script resolves repository paths, then runs `GenerateFeedback.scala` with that input, the HTML template, `--run`, `--publish-lab`, and `--deployment-root`. `build.sh` packages the server jar; it does not publish reports. `LORIKEET_DEPLOYMENT_ROOT` can override the default deployment output directory for both scripts.
 
+Starting another grading run moves prior `grading_*` artifacts, `.tmp`, and the local `feedback/` preview into a new `output/archive/before-<timestamp>-*/` directory. Published pages, private link keys, and feedback logs stay in place. To publish an archived run, pass that archive directory as the third argument to `publish_lab.sh`.
+
 Publishing reads that run's result manifest and full-code histories; renders one HTML page per submission in `deployment/public/<lab>/`; replaces only the chosen lab's local public directory; and writes `deployment/private/links/<lab>.csv`. It creates/reuses `deployment/private/hmac.key` so the same lab/submission keeps the same opaque URL on later publishes.
 
 Back up `private/hmac.key` so republishing keeps URLs stable. Never upload `private/`. After checking the generated pages and CSV, transfer only the chosen lab's public pages. From the repository root on the build machine:

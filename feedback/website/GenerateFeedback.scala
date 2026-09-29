@@ -118,6 +118,7 @@ object GenerateFeedback:
           then throw IllegalArgumentException("Invalid rewrite transition: " + historyPath)
           code = step("code").str
         }
+        history.value("file") = ujson.Str(Paths.get(history("file").str).getFileName.toString)
         history
       }
       .to(mutable.ArrayBuffer)
@@ -156,25 +157,39 @@ object GenerateFeedback:
     histories.foreach { history =>
       val steps = history("steps").arr
       val finalCode = steps.lastOption.fold(history("initial").str)(_("code").str)
+      val byRule = mutable.LinkedHashMap.empty[String, mutable.ArrayBuffer[ujson.Value]]
       history("lints").arr.foreach { lint =>
         val start = lint("start").num.toInt
         val end = lint("end").num.toInt
         if start < 0 || end < start || end > finalCode.length then
           throw IllegalArgumentException("Invalid final lint in " + history("file").str)
+        byRule.getOrElseUpdate(lint("rule").str, mutable.ArrayBuffer.empty) += lint
+      }
+      byRule.foreach { (rule, matches) =>
+        val first = matches.head
         val id = "observation-" + observationNumber
         observationNumber += 1
-        val rule = lint("rule").str
         val file = history("file").str
-        val line = lint("line").num.toInt
-        val column = lint("column").num.toInt
+        val line = first("line").num.toInt
+        val column = first("column").num.toInt
+        val start = first("start").num.toInt
+        val end = first("end").num.toInt
         steps += ujson.Obj(
           "kind" -> "observation",
           "id" -> id,
           "rule" -> rule,
-          "description" -> lint("description").str,
+          "description" -> first("description").str,
           "title" -> rule,
-          "explanation" -> lint("description").str,
+          "explanation" -> first("description").str,
           "location" -> s"$file:$line:$column",
+          "locations" -> ujson.Arr.from(matches.map { lint =>
+            ujson.Obj(
+              "start" -> lint("start"),
+              "end" -> lint("end"),
+              "line" -> lint("line"),
+              "column" -> lint("column")
+            )
+          }),
           "start" -> start,
           "end" -> end,
           "line" -> line,
@@ -194,11 +209,10 @@ object GenerateFeedback:
         if history.value.get("truncated").exists(_.bool) then
           s"<p class=\"limit-warning\">The rewrite limit of ${history("limit").num.toInt} was reached; more patterns may still match.</p>"
         else ""
+      val stageCount = steps.map(step => if step("kind").str == "rewrite" then 2 else 1).sum
       s"""<section class="timeline" data-history-index="$index"><div class="timeline-heading"><div><span class="eyebrow">Feedback timeline</span><h2>${escape(
-          Paths.get(history("file").str).getFileName.toString
-        )}</h2><p class="location">${escape(
           history("file").str
-        )}</p></div><span class="step-count" data-step-count></span></div><div class="workspace"><div class="code-panel"><div class="code-toolbar"><span data-version-label>Original</span><span class="context-tools"><span data-context-label></span><span>Scala · Prism</span></span></div><div class="code-view"><table class="code-table" role="presentation"><tbody data-code></tbody></table></div></div><aside class="change-card" data-change-card></aside></div><nav class="timeline-nav" aria-label="Feedback navigation"><button type="button" class="secondary" data-back>← Back</button><div class="progress-wrap"><progress data-progress max="${steps.length}" value="0"></progress><span data-progress-label></span></div><button type="button" data-forward>Next feedback →</button></nav><section class="history" data-history hidden><div class="history-title"><span class="eyebrow">History</span><h3>Changes and observations</h3></div><ol data-history-list></ol></section>$warning</section>"""
+        )}</h2></div><span class="step-count" data-step-count></span></div><div class="workspace"><div class="code-panel"><div class="code-toolbar"><span data-version-label>Original</span><span class="context-tools"><span data-context-label></span><span>Scala · Prism</span></span></div><div class="code-view"><table class="code-table" role="presentation"><tbody data-code></tbody></table></div></div><aside class="change-card" data-change-card></aside></div><nav class="timeline-nav" aria-label="Feedback navigation"><button type="button" class="secondary" data-back>← Back</button><div class="progress-wrap"><progress data-progress max="$stageCount" value="0"></progress><span data-progress-label></span></div><button type="button" data-forward>Next feedback →</button></nav><section class="history" data-history hidden><div class="history-title"><span class="eyebrow">History</span><h3>Changes and observations</h3></div><ol data-history-list></ol></section>$warning</section>"""
     }.mkString
     val empty =
       if visibleHistories.nonEmpty then ""
@@ -241,9 +255,10 @@ object GenerateFeedback:
       s"<script>$prism</script><script type=\"application/json\" id=\"timeline-data\">$timelineData</script><script type=\"application/json\" id=\"feedback-log-data\">$logData</script><script>${read(websiteDir.resolve("tracking.js"))}</script>"
     val page = renderDocument(template, title, main, interactive = true)
       .replace("</body>", scripts + "</body>")
-    val counts =
-      feedbackItems.values.groupMapReduce(_.rule)(_ => 1)(_ + _).toMap
-    ReportPage(filename, title, page, feedbackItems.size, counts)
+    val counts = visibleHistories.flatMap(_("steps").arr).groupMapReduce(_("rule").str)(
+      step => if step("kind").str == "observation" then step("locations").arr.size else 1
+    )(_ + _).toMap
+    ReportPage(filename, title, page, counts.values.sum, counts)
 
   private def buildOverview(
       entries: Seq[OverviewEntry],

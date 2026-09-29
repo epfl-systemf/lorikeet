@@ -22,6 +22,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import scala.sys.process.{Process, ProcessLogger}
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable
 import java.nio.charset.StandardCharsets
 import scala.util.matching.Regex
 
@@ -133,29 +134,54 @@ object CheckTool:
         )
       }
 
-      // Linting check
-      val (scalafixExit, scalafixOutput) = runScalafix(cfg.labDir, cfg, historyTemp)
-      if (scalafixExit != 0) {
-        System.err.println(scalafixOutput)
-        return logAndReturn(ProcessingError(studentId))
-      }
-      val histories = Files.list(historyTemp)
-      val historyFiles = try histories.iterator().asScala.toVector.sortBy(_.getFileName.toString)
-      finally histories.close()
-      if (historyFiles.size != contexts.size)
-        return logAndReturn(ProcessingError(studentId))
-      val rules = processHistoryLints(historyFiles, lintReport) ++
-        historyFiles.flatMap { history =>
-          ujson.read(Files.readString(history))("steps").arr.map(step =>
-            Rule(step("rule").str, step("description").str)
-          )
+      // One rewrite per file and round. Recompile changed sources before the
+      // next round so type-aware rules see SemanticDB for the current code.
+      val merged = mutable.LinkedHashMap.empty[String, ujson.Value]
+      var historyFiles = Vector.empty[Path]
+      var changed = true
+      while (changed) {
+        clearDirectory(historyTemp)
+        val (scalafixExit, scalafixOutput) = runScalafix(cfg.labDir, cfg, historyTemp)
+        if (scalafixExit != 0) {
+          System.err.println(scalafixOutput)
+          return logAndReturn(ProcessingError(studentId))
         }
+        val histories = Files.list(historyTemp)
+        historyFiles = try histories.iterator().asScala.toVector.sortBy(_.getFileName.toString)
+        finally histories.close()
+        if (historyFiles.size != contexts.size)
+          return logAndReturn(ProcessingError(studentId))
+        val round = historyFiles.map(path => ujson.read(Files.readString(path)))
+        if (round.map(_("file").str).distinct.size != contexts.size)
+          return logAndReturn(ProcessingError(studentId))
+        round.foreach { snapshot =>
+          val file = snapshot("file").str
+          val history = merged.getOrElseUpdate(file, ujson.Obj(
+            "schemaVersion" -> snapshot("schemaVersion"),
+            "file" -> snapshot("file"),
+            "limit" -> snapshot("limit"),
+            "truncated" -> false,
+            "initial" -> snapshot("initial"),
+            "steps" -> ujson.Arr(),
+            "lints" -> ujson.Arr()
+          ))
+          history("steps").arr ++= snapshot("steps").arr
+          history.obj("lints") = snapshot("lints")
+          if (history("steps").arr.size > history("limit").num.toInt)
+            throw IllegalStateException(s"Rewrite limit reached in $file")
+        }
+        changed = round.exists(_("steps").arr.nonEmpty)
+        if (changed && !compile(cfg.labDir))
+          return logAndReturn(RewriteError(studentId))
+      }
+      val rules = processHistoryLints(historyFiles, lintReport) ++
+        merged.values.toSeq.flatMap(_("steps").arr.map(step =>
+          Rule(step("rule").str, step("description").str)
+        ))
       val bundledHistory = ujson.Obj(
         "schemaVersion" -> 1,
         "student" -> studentId,
-        "files" -> ujson.Arr.from(historyFiles.map(path =>
-          ujson.read(Files.readString(path))
-        ))
+        "files" -> ujson.Arr.from(merged.values)
       )
       Files.writeString(
         cfg.historyDir.resolve(s"$studentId.history.json"),
@@ -213,6 +239,29 @@ object CheckTool:
     finally entries.close()
   }
 
+  def archivePreviousOutput(outputRoot: Path, timestamp: String): Option[Path] = {
+    Files.createDirectories(outputRoot)
+    val generatedNames = Seq(
+      "grading_diffs_", "grading_histories_", "grading_originals_",
+      "grading_reports_", "grading_results_"
+    )
+    val entries = Files.list(outputRoot)
+    val previous = try entries.iterator().asScala.toVector.filter { path =>
+      val name = path.getFileName.toString
+      name == "feedback" || name == ".tmp" ||
+        generatedNames.exists(name.startsWith)
+    }
+    finally entries.close()
+    if previous.isEmpty then None
+    else {
+      val archiveRoot = outputRoot.resolve("archive")
+      Files.createDirectories(archiveRoot)
+      val archived = Files.createTempDirectory(archiveRoot, s"before-$timestamp-")
+      previous.foreach(path => Files.move(path, archived.resolve(path.getFileName)))
+      Some(archived)
+    }
+  }
+
   def runScalafix(
       labDir: Path,
       cfg: Config,
@@ -226,15 +275,15 @@ object CheckTool:
 
     val fileArgs = cfg.targetFiles.map(f => s"--files=$f").mkString(" ")
     val historyProperty = ujson.Str(historyDir.toString).render()
+    val clearProperties =
+      ";eval java.lang.System.clearProperty(\"lorikeet.rewrites-per-run\");eval java.lang.System.clearProperty(\"lorikeet.history.dir\")"
     val command = Seq(
       "sbt",
-      s";eval java.lang.System.setProperty(\"lorikeet.history.dir\", $historyProperty);scalafix MetaRule $fileArgs"
+      s";eval java.lang.System.setProperty(\"lorikeet.history.dir\", $historyProperty);eval java.lang.System.setProperty(\"lorikeet.rewrites-per-run\", \"1\");scalafix MetaRule $fileArgs$clearProperties"
     )
-    val exitCode = Process(
-      command,
-      labDir.toFile,
-      "LORIKEET_HISTORY_DIR" -> historyDir.toString
-    ).!(logger)
+    val exitCode = Process(command, labDir.toFile).!(logger)
+    if (exitCode != 0)
+      Process(Seq("sbt", clearProperties), labDir.toFile).!(logger)
     (exitCode, output.toString())
   }
 
@@ -532,6 +581,12 @@ object CheckTool:
       resultsFile = outputRoot.resolve(s"grading_results_$timestamp.json"),
       tmpDir = outputRoot.resolve(".tmp"),
       targetFiles = TARGET_FILES.map(f => ROOT.resolve(SCAFFOLD_DIR).resolve(f))
+    )
+
+    if !Files.isDirectory(cfg.submissionsDir) || !Files.isDirectory(cfg.labDir) then
+      throw IllegalArgumentException("Missing submissions or scaffold directory")
+    archivePreviousOutput(outputRoot, timestamp).foreach(path =>
+      println(s"Archived previous generated output in $path")
     )
 
     List(

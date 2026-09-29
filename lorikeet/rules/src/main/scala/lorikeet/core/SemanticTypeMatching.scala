@@ -37,8 +37,12 @@ object SemanticTypeMatching:
             // )
             None
       case _ =>
-        // System.err.println("No symbol info found for tree: " + t.syntax)
-        None
+        // SemanticDB can attach the Boolean return type to && rather than
+        // to the complete infix expression.
+        t match
+          case Term.ApplyInfix(_, operator, _, _) =>
+            getSymbolSemanticType(operator)
+          case _ => None
 
   /** Get the literal type of a literal tree */
   def getLiteralType(t: Tree): Option[Type] =
@@ -79,6 +83,16 @@ object SemanticTypeMatching:
   )(using doc: SemanticDocument): MatchResult =
     val candType = getSymbolSemanticType(cand)
     val literalType = getLiteralType(cand)
+
+    // The built-in Boolean operator's resolved symbol proves the result type
+    // even when SemanticDB omits a signature for this infix expression.
+    if patType.structure == Type.Name("Boolean").structure then
+      cand match
+        case Term.ApplyInfix(_, operator, _, _)
+            if Set("scala/Boolean#`&&`().", "scala/Boolean#`||`().")
+              .contains(operator.symbol.value) =>
+          return Some(bindings)
+        case _ => ()
 
     (candType, literalType) match
       case (Some(_), _)                                                    => ()

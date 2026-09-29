@@ -34,6 +34,7 @@ case class TokenRule(
     pattern: Regex,
     rewrite: Option[String],
     onlyPackages: Option[List[String]],
+    targetKind: Option[String],
     description: Option[String]
 )
 
@@ -106,21 +107,66 @@ object LorikeetEngine:
     ): List[(Int, Int, String, Int)] =
       if !packageMatches(rule.onlyPackages, source) then Nil
       else
-        val tokenRanges = source.tokens.iterator
-          .filter(_.pos.start >= 0)
-          .map(token => (token.pos.start, token.pos.end))
-          .toSet
-        val tokenStarts = tokenRanges.map(_._1)
-        val tokenEnds = tokenRanges.map(_._2)
-        rule.pattern
-          .findAllMatchIn(sourceCode)
-          .zipWithIndex
-          .collect {
-            case (matched, index)
-                if tokenStarts(matched.start) && tokenEnds(matched.end) =>
-              (matched.start, matched.end, matched.matched, index)
-          }
-          .toList
+        def isFunctionArgument(arg: Term): Boolean = arg match
+          case _: Term.Function | _: Term.PartialFunction => true
+          case Term.Block(stats) => stats.lastOption.collect {
+              case last: Term => isFunctionArgument(last)
+            }.getOrElse(false)
+          case _ =>
+            arg.symbol.info.exists(_.signature match
+              case MethodSignature(_, parameterLists, _) if parameterLists.nonEmpty => true
+              case _ => false) ||
+              SemanticTypeMatching.getSymbolSemanticType(arg).exists {
+                case TypeRef(_, symbol, _) =>
+                  symbol.displayName.matches("(?:Function[0-9]+|ContextFunction[0-9]+|PartialFunction)")
+                case _ => false
+              }
+        rule.targetKind match
+          case Some("function-argument") =>
+            source.collect {
+              case Term.Apply.After_4_6_0(_, Term.ArgClause(args, _)) =>
+                args.flatMap { arg =>
+                  val start = arg.pos.start
+                  val end = arg.pos.end
+                  Option.when(start >= 0 && end > start && end <= sourceCode.length &&
+                    isFunctionArgument(arg) &&
+                    rule.pattern.findFirstIn(sourceCode.substring(start, end)).nonEmpty)(
+                    (start, end, sourceCode.substring(start, end))
+                  )
+                }
+            }.flatten.distinctBy { case (start, end, _) => (start, end) }
+              .zipWithIndex.map { case ((start, end, matched), index) =>
+                (start, end, matched, index)
+              }
+          case Some(kind) =>
+            val names = source.collect {
+              case p: Term.Param if kind == "parameter" => List(p.name)
+              case d: Defn.Def if kind == "function" => List(d.name)
+              case v: Defn.Val if kind == "value" =>
+                v.pats.collect { case Pat.Var(name) => name }
+            }.flatten
+            names.filter(name => name.pos.start >= 0 &&
+              rule.pattern.findFirstIn(name.value).nonEmpty)
+              .zipWithIndex.map { (name, index) =>
+                (name.pos.start, name.pos.end,
+                  sourceCode.substring(name.pos.start, name.pos.end), index)
+              }
+          case None =>
+            val tokenRanges = source.tokens.iterator
+              .filter(_.pos.start >= 0)
+              .map(token => (token.pos.start, token.pos.end))
+              .toSet
+            val tokenStarts = tokenRanges.map(_._1)
+            val tokenEnds = tokenRanges.map(_._2)
+            rule.pattern
+              .findAllMatchIn(sourceCode)
+              .zipWithIndex
+              .collect {
+                case (matched, index)
+                    if tokenStarts(matched.start) && tokenEnds(matched.end) =>
+                  (matched.start, matched.end, matched.matched, index)
+              }
+              .toList
 
     val initialCode = doc.input.text
     val filename = inputName(doc.input)
@@ -221,7 +267,8 @@ object LorikeetEngine:
           }
           changed match
             case List((oldIf: Term.If, newIf: Term.If))
-                if oldIf.cond.structure == newIf.cond.structure &&
+                if (oldStats.last ne oldIf) &&
+                  oldIf.cond.structure == newIf.cond.structure &&
                   (oldIf.elsep match
                     case Lit.Boolean(false) => true
                     case _ => false) &&
@@ -246,6 +293,127 @@ object LorikeetEngine:
                   if removedTrue then "(?s)\\s+true\\s+else\\s+false"
                   else "(?s)\\s+else\\s+false"
                 Option.when(removed.matches(expected))((start, end))
+              }
+            case _ => None
+        case _ => None
+
+    def finalReturnEdit(original: Tree, rewritten: Tree): Option[(Int, Int)] =
+      (original, rewritten) match
+        case (oldDef: Defn.Def, newDef: Defn.Def) =>
+          val last = (oldDef.body, newDef.body) match
+            case (Term.Block(oldStats), Term.Block(newStats))
+                if oldStats.size == newStats.size &&
+                  oldStats.dropRight(1).map(_.structure) ==
+                    newStats.dropRight(1).map(_.structure) =>
+              (oldStats.lastOption, newStats.lastOption) match
+                case (Some(ret: Term.Return), Some(value: Term))
+                    if ret.expr.structure == value.structure => Some(ret)
+                case _ => None
+            case (ret: Term.Return, value: Term)
+                if ret.expr.structure == value.structure => Some(ret)
+            case _ => None
+          last.flatMap { ret =>
+            val from = ret.pos.start
+            val to = ret.expr.pos.start
+            Option.when(code.substring(from, to).matches("return\\s+"))((from, to))
+          }
+        case _ => None
+
+    def evaluateBeforeTrueEdit(original: Tree, rewritten: Tree): Option[(Int, Int, String)] =
+      (original, rewritten) match
+        case (oldDef: Defn.Def, newDef: Defn.Def) =>
+          val oldStats = oldDef.body match
+            case Term.Block(stats) => stats
+            case term => List(term)
+          newDef.body match
+            case Term.Block(newStats)
+                if newStats.size == oldStats.size + 1 &&
+                  oldStats.dropRight(1).map(_.structure) ==
+                    newStats.dropRight(2).map(_.structure) =>
+              (oldStats.last, newStats(newStats.size - 2), newStats.last) match
+                case (oldLast: Term.ApplyInfix, effect: Term, Lit.Boolean(true))
+                    if oldLast.lhs.structure == effect.structure =>
+                  val from = effect.pos.end
+                  val to = oldLast.pos.end
+                  val lineStart = code.lastIndexOf('\n', oldLast.pos.start - 1) + 1
+                  val indent = code.substring(lineStart, oldLast.pos.start)
+                  Option.when(indent.forall(_ == ' ') &&
+                    code.substring(from, to).matches("(?s)\\s*\\|\\|\\s*true"))(
+                    (from, to, s"\n${indent}true")
+                  )
+                case _ => None
+            case _ => None
+        case _ => None
+
+    def inlineFinalValEdit(original: Tree, rewritten: Tree): Option[(Int, Int, String)] =
+      (original, rewritten) match
+        case (Term.Block(oldStats), Term.Block(newStats))
+            if oldStats.size >= 2 && newStats.size == oldStats.size - 1 &&
+              oldStats.dropRight(2).map(_.structure) ==
+                newStats.dropRight(1).map(_.structure) =>
+          (oldStats(oldStats.size - 2), oldStats.last, newStats.last) match
+            case (oldVal: Defn.Val, oldName: Term.Name, newLast: Term)
+                if oldVal.mods.isEmpty && oldVal.decltpe.isEmpty &&
+                  oldVal.pats.map(_.structure) == List(Pat.Var(oldName).structure) &&
+                  oldVal.rhs.structure == newLast.structure =>
+              val discarded = code.substring(oldVal.pos.start, oldVal.rhs.pos.start) +
+                code.substring(oldVal.pos.end, oldName.pos.start)
+              Option.when(!discarded.contains("//") && !discarded.contains("/*"))(
+                (oldVal.pos.start, oldName.pos.end,
+                  code.substring(oldVal.rhs.pos.start, oldVal.rhs.pos.end))
+              )
+            case _ => None
+        case _ => None
+
+    // Splice a changed val and its new guard without reprinting the block.
+    def extractedPrintEdit(
+        original: Tree,
+        rewritten: Tree
+    ): Option[(Int, Int, String)] =
+      (original, rewritten) match
+        case (Term.Block(oldStats), Term.Block(newStats))
+            if newStats.size == oldStats.size + 1 =>
+          val index = oldStats.zip(newStats).indexWhere((oldStat, newStat) =>
+            oldStat.structure != newStat.structure)
+          if index < 0 || index == oldStats.size - 1 || oldStats.drop(index + 1).map(_.structure) !=
+              newStats.drop(index + 2).map(_.structure) then None
+          else (oldStats(index), newStats(index), newStats(index + 1)) match
+            case (oldVal: Defn.Val, newVal: Defn.Val, newIf: Term.If) =>
+              def source(term: Term): Option[String] =
+                val originalText = Option.when(term.pos.start >= 0 &&
+                  term.pos.end <= code.length)(code.substring(term.pos.start, term.pos.end))
+                  .filter(text => scala.util.Try(Config.parseCode(text, "local edit", "source"))
+                    .toOption.exists(_.structure == term.structure))
+                originalText.orElse(term match
+                  case Term.If(condition, thenp, elsep) =>
+                    for
+                      test <- source(condition)
+                      yes <- source(thenp)
+                      no <- source(elsep)
+                    yield s"if $test then $yes else $no"
+                  case _ => None)
+              (for
+                replacementValue <- source(newVal.rhs)
+                here <- source(newIf.cond)
+                effect <- source(newIf.thenp)
+                if oldVal.rhs.pos.start >= oldVal.pos.start
+                if !effect.matches("(?s).*\\b" + java.util.regex.Pattern.quote(here) + "\\b.*")
+                if !newIf.thenp.collect { case _: Term.Return => true }.contains(true)
+              yield
+                val lineStart = code.lastIndexOf('\n', oldVal.pos.start - 1) + 1
+                val indent = code.substring(lineStart, oldVal.pos.start)
+                val prefix = code.substring(oldVal.pos.start, oldVal.rhs.pos.start)
+                val compactPrefix = if prefix.contains("//") then prefix
+                  else prefix.replaceFirst("\\s+$", " ")
+                val replacement =
+                  s"$compactPrefix$replacementValue\n${indent}if $here then $effect"
+                val parsed = scala.util.Try(Config.parseCode(
+                  s"{\n$replacement\n}", "local edit", "local edit"
+                )).toOption
+                (oldVal.pos.start, oldVal.pos.end, replacement, parsed.exists(
+                  _.structure == Term.Block(List(newVal, newIf)).structure
+                ))).filter(_._4).map { case (from, to, replacement, _) =>
+                (from, to, replacement)
               }
             case _ => None
         case _ => None
@@ -275,6 +443,7 @@ object LorikeetEngine:
             variable.findAllMatchIn(normalized).foreach { matched =>
               val value = bindings.bindings.get(matched.group(1)).flatMap {
                 case Binding.TermValue(term) => Some(term)
+                case Binding.StatValue(stat) => Some(stat)
                 case Binding.TypeValue(tpe) => Some(tpe)
                 case _ => None
               }.filter(t => t.pos.start >= 0 && t.pos.end <= code.length)
@@ -282,7 +451,11 @@ object LorikeetEngine:
                 case Some(t) =>
                   output.append(normalized.substring(previous, matched.start))
                   val source = code.substring(t.pos.start, t.pos.end)
-                  output.append(if parenthesize && t.isInstanceOf[Term] then
+                  val needsParens = t match
+                    case _: Term.Name | _: Term.Select | _: Term.Apply | _: Lit => false
+                    case _: Term => true
+                    case _ => false
+                  output.append(if parenthesize && needsParens then
                     s"($source)" else source)
                   previous = matched.end
                 case None => complete = false
@@ -307,6 +480,40 @@ object LorikeetEngine:
                 }
           render(false).orElse(render(true))
         }
+
+    // These shapes need a source splice. Printing their enclosing block or
+    // method would change unrelated Scala 3 syntax when a splice is unsafe.
+    def needsLocalEdit(original: Tree, rewritten: Tree): Boolean =
+      (original, rewritten) match
+        case (Term.Block(oldStats), Term.Block(newStats)) =>
+          (oldStats.size == newStats.size && oldStats.zip(newStats).exists {
+            case (oldIf: Term.If, newIf: Term.If) =>
+              oldIf.structure != newIf.structure && newIf.elsep.isInstanceOf[Lit.Unit]
+            case _ => false
+          }) ||
+          (newStats.size == oldStats.size + 1 && oldStats.exists(_.isInstanceOf[Defn.Val]) &&
+            newStats.exists(_.isInstanceOf[Term.If])) ||
+          (oldStats.size == newStats.size + 1 &&
+            ((oldStats.dropRight(1).lastOption, newStats.lastOption) match
+              case (Some(value: Defn.Val), Some(last: Term)) =>
+                value.rhs.structure == last.structure
+              case _ => false))
+        case (oldDef: Defn.Def, newDef: Defn.Def) =>
+          val oldLast = oldDef.body match
+            case Term.Block(stats) => stats.lastOption
+            case term => Some(term)
+          val newLast = newDef.body match
+            case Term.Block(stats) => stats.lastOption
+            case term => Some(term)
+          oldLast.exists(_.isInstanceOf[Term.Return]) ||
+            (oldLast.exists {
+              case Term.ApplyInfix(_, Term.Name("||"), _, Term.ArgClause(List(Lit.Boolean(true)), _)) => true
+              case _ => false
+            } && newLast.exists {
+              case Lit.Boolean(true) => true
+              case _ => false
+            })
+        case _ => false
 
     def findRewrites(): List[RewriteStep] =
       val treeRewrites = ruleTrees.zipWithIndex
@@ -333,13 +540,18 @@ object LorikeetEngine:
                   if candidate.structure == replacementTree.structure then None
                   else
                     val local = discardedBooleanEdit(candidate, replacementTree)
-                    val edit = local match
-                      case Some((from, to)) => Some((from, to, ""))
-                      // These rules need the local edit; falling back to a
-                      // whole-block print would reintroduce syntax churn.
-                      case None if rule.name == "Discarded Boolean Result" ||
-                          rule.name == "Discarded False Else Branch" => None
-                      case None => Some((
+                    val finalReturn = finalReturnEdit(candidate, replacementTree)
+                    val evaluateBeforeTrue = evaluateBeforeTrueEdit(candidate, replacementTree)
+                    val inlineFinalVal = inlineFinalValEdit(candidate, replacementTree)
+                    val extracted = extractedPrintEdit(candidate, replacementTree)
+                    val edit = (local, finalReturn, evaluateBeforeTrue, inlineFinalVal, extracted) match
+                      case (Some((from, to)), _, _, _, _) => Some((from, to, ""))
+                      case (_, Some((from, to)), _, _, _) => Some((from, to, ""))
+                      case (_, _, Some(edit), _, _) => Some(edit)
+                      case (_, _, _, Some(edit), _) => Some(edit)
+                      case (_, _, _, _, Some(edit)) => Some(edit)
+                      case _ if needsLocalEdit(candidate, replacementTree) => None
+                      case _ => Some((
                           candidate.pos.start,
                           candidate.pos.end,
                           sourceRewrite(rule, bindings, candidate, replacementTree)
@@ -417,8 +629,12 @@ object LorikeetEngine:
         else None
       }
 
+    val perRunLimit = sys.props.get("lorikeet.rewrites-per-run").map(_.toInt)
+    if perRunLimit.exists(_ < 1) then
+      throw IllegalArgumentException("lorikeet.rewrites-per-run must be positive.")
     var pending = findRewrites()
-    while steps.size < parsedConfig.maxRewrites do
+    while steps.size < perRunLimit.fold(parsedConfig.maxRewrites)(
+        math.min(_, parsedConfig.maxRewrites)) do
       nextRewrite(pending) match
         case None =>
           writeHistory(initialCode, steps, finalLints(), parsedConfig.maxRewrites, false)
@@ -437,6 +653,12 @@ object LorikeetEngine:
           pending = afterEdit(pending, applied)
           tree = Config.parseSource(code, filename)
           steps = steps :+ applied.copy(code = code)
+
+    // The checker recompiles before the next invocation so type-aware matches
+    // see fresh SemanticDB data rather than positions from the previous source.
+    if perRunLimit.nonEmpty then
+      writeHistory(initialCode, steps, finalLints(), parsedConfig.maxRewrites, false)
+      return legacyLints + Patch.replaceTree(doc.tree, code)
 
     val truncated = nextRewrite(pending).nonEmpty
     writeHistory(initialCode, steps, finalLints(), parsedConfig.maxRewrites, truncated)

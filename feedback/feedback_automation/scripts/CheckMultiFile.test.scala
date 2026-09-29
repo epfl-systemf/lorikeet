@@ -24,6 +24,19 @@ class CheckMultiFileTest extends munit.FunSuite:
       Files.createDirectories(path.getParent)
       Files.writeString(path, value, UTF_8)
 
+    write(output.resolve("grading_results_old.json"), "[]")
+    write(output.resolve("feedback/old.html"), "stale preview")
+    write(output.resolve(".tmp/stale.txt"), "stale scratch")
+    write(output.resolve("deployment/keep.txt"), "published data")
+    write(output.resolve("feedback_logs/keep.txt"), "review events")
+    val archived = CheckTool.archivePreviousOutput(output, "demo").get
+    assert(Files.exists(archived.resolve("grading_results_old.json")))
+    assert(Files.exists(archived.resolve("feedback/old.html")))
+    assert(Files.exists(archived.resolve(".tmp/stale.txt")))
+    assert(!Files.exists(output.resolve("grading_results_old.json")))
+    assert(Files.exists(output.resolve("deployment/keep.txt")))
+    assert(Files.exists(output.resolve("feedback_logs/keep.txt")))
+
     val ruleVersion = sys.env.getOrElse("LORIKEET_TEST_VERSION",
       fail("Set LORIKEET_TEST_VERSION to the locally published rules3 version"))
     write(lab.resolve("build.sbt"),
@@ -55,14 +68,15 @@ class CheckMultiFileTest extends munit.FunSuite:
         |    pattern = "{ `?before`: @mult; if `?condition` then `?body` else false; `?next`; `?after`: @mult }"
         |    rewrite = "{ `?before`: @mult; if `?condition` then `?body`; `?next`; `?after`: @mult }"
         |  }
-        |  { name = "Boolean If", pattern = "if `?condition` then true else false", rewrite = "`?condition`" }
-        |  { name = "Boolean If", pattern = "if `?condition` then false else (`?expression`: Boolean)", rewrite = "!`?condition` && `?expression`" }
-        |  { name = "Boolean If", pattern = "if `?condition` then (`?expression`: Boolean) else true", rewrite = "!`?condition` || `?expression`" }
-        |  { name = "Boolean If", pattern = "if `?condition` then true else (`?expression`: Boolean)", rewrite = "`?condition` || `?expression`" }
-        |  { name = "Boolean If", pattern = "if `?condition` then (`?expression`: Boolean) else false", rewrite = "`?condition` && `?expression`" }
+        |  { name = "If True Else False", pattern = "if `?condition` then true else false", rewrite = "`?condition`" }
+        |  { name = "If False Else Boolean", pattern = "if `?condition` then false else (`?expression`: Boolean)", rewrite = "!`?condition` && `?expression`" }
+        |  { name = "If Boolean Else True", pattern = "if `?condition` then (`?expression`: Boolean) else true", rewrite = "!`?condition` || `?expression`" }
+        |  { name = "If True Else Boolean", pattern = "if `?condition` then true else (`?expression`: Boolean)", rewrite = "`?condition` || `?expression`" }
+        |  { name = "If Boolean Else False", pattern = "if `?condition` then (`?expression`: Boolean) else false", rewrite = "`?condition` && `?expression`" }
         |]
         |token-rules = [
         |  { name = "Boolean Negation", pattern = "!true", rewrite = "false" }
+        |  { name = "Trailing Semicolon", pattern = ";(?=[ \\t]*(?://[^\\r\\n]*)?(?:\\r?\\n|$))", rewrite = "" }
         |]
         |""".stripMargin)
 
@@ -73,7 +87,7 @@ class CheckMultiFileTest extends munit.FunSuite:
     write(student.resolve(relativeFiles(0)),
       "package a\nobject Main:\n  val value: Int = 1 + 0\n  val plainTrue = true\n  val negatedTrue = !true\n  def example(flag: Boolean): Boolean =\n    if flag then println(\"found\")\n    else false\n    true\n  def example2(flag: Boolean): Boolean =\n    if flag then\n      println(\"effect\")\n      true\n    else false\n    true\n")
     write(student.resolve(relativeFiles(1)),
-      "package b\nobject Main {\n  val value: Int = 2 + 0\n  def oldStyle(flag: Boolean): Boolean = if (flag) true else false\n  def cases(c: Boolean, e: Boolean): Boolean = {\n    // Keep this note and the surrounding method intact.\n    val a = if (c) false else e\n    val b = if (c) e else true\n    val d = if (c) true else e\n    val f = if (c) e else false\n    val g = if (c || e) false else e\n    a && b && d && f && g\n  }\n}\n")
+      "package b\nobject Main {\n  val value: Int = 2 + 0;\n  def oldStyle(flag: Boolean): Boolean = if (flag) true else false\n  def cases(c: Boolean, e: Boolean): Boolean = {\n    // Keep this note and the surrounding method intact.\n    val a = if (c) false else e\n    val b = if (c) e else true\n    val d = if (c) true else e\n    val f = if (c) e else false\n    val g = if (c || e) false else e\n    val h = if (c) c && e else false\n    a && b && d && f && g && h\n  }\n}\n")
     val config = CheckTool.Config(
       labDir = lab,
       submissionsDir = student.getParent,
@@ -93,7 +107,12 @@ class CheckMultiFileTest extends munit.FunSuite:
     assertEquals(result.asInstanceOf[CheckTool.IssuesFound].issues,
       Map("First rewrite" -> 1, "Second rewrite" -> 1,
         "Boolean Negation" -> 1,
-        "Boolean If" -> 6,
+        "If True Else False" -> 1,
+        "If False Else Boolean" -> 2,
+        "If Boolean Else True" -> 1,
+        "If True Else Boolean" -> 1,
+        "If Boolean Else False" -> 2,
+        "Trailing Semicolon" -> 1,
         "Discarded Boolean Result" -> 1,
         "Discarded False Else Branch" -> 1))
     CheckTool.writeResults(Seq(result), config.resultsFile)
@@ -101,17 +120,22 @@ class CheckMultiFileTest extends munit.FunSuite:
       config.historyDir.resolve("student-0.history.json"), UTF_8))
     val files = bundle("files").arr
     assertEquals(files.size, 2)
-    assertEquals(files.map(_("steps").arr.size).toSet, Set(4, 7))
+    assertEquals(files.map(_("steps").arr.size).toSet, Set(4, 9))
     assertEquals(files.map(_("steps")(0)("rule").str).toSet,
       Set("First rewrite", "Second rewrite"))
     val findHistory = files.find(_("file").str.endsWith("/a/Main.scala")).get
     val oldStyleHistory = files.find(_("file").str.endsWith("/b/Main.scala")).get
     assert(oldStyleHistory("initial").str.contains("if flag then"))
-    val booleanEdits = oldStyleHistory("steps").arr.filter(_("rule").str == "Boolean If")
-    assertEquals(booleanEdits.size, 6)
-    assert(booleanEdits.map(_("after").str).toSet.contains("!(c || e) && (e)"))
+    val booleanEdits = oldStyleHistory("steps").arr.filter(_("rule").str.startsWith("If "))
+    assertEquals(booleanEdits.size, 7)
+    assert(booleanEdits.map(_("after").str).toSet.contains("!(c || e) && e"))
     assert(Set("flag", "!c && e", "!c || e", "c || e", "c && e")
       .subsetOf(booleanEdits.map(_("after").str).toSet))
+    assert(booleanEdits.exists(step => step("before").str.contains("c && e else false") &&
+      step("after").str.contains("c && (c && e)")))
+    assert(oldStyleHistory("steps").arr.exists(step =>
+      step("rule").str == "Trailing Semicolon" &&
+        step("before").str == ";" && step("after").str == ""))
     assert(booleanEdits.last("code").str.contains("// Keep this note"))
     assert(booleanEdits.last("code").str.contains("object Main:"))
     assert(!booleanEdits.last("code").str.contains("if ("))

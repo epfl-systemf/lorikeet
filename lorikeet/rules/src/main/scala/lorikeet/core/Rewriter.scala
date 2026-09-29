@@ -13,17 +13,20 @@ case class Rewriter()(using
 
   val semMatcher = SemanticMatcher()
 
-  // Extractor for metavariables that should reference a simple term or type
+  // A placeholder in statement position may bind a declaration, not just a term.
   private object BoundVar:
     def unapply(tree: Tree)(using b: Bindings): Option[Tree] = tree match
       case MetaVar(name) =>
         tree match
-          case t: Term => Some(b.getOrThrow[Term](name))
+          case t: Term => Some(b.getOrThrow[Stat](name))
           case t: Type => Some(b.getOrThrow[Type](name))
       case _ => None
 
   def applyBindings(tree: Tree, bindings: Bindings): Tree =
     given Bindings = bindings
+    def requireMinimum(name: String, actual: Int, minimum: Int): Unit =
+      if actual < minimum then
+        throw new Exception(s"@$name requires at least $minimum item(s), found $actual")
     tree.transform {
       // Substitutions
       case Term.Apply
@@ -31,9 +34,10 @@ case class Rewriter()(using
           if substitutions.forall(isSubstitution) =>
         applySubstitutions(base, substitutions, bindings)
       // Mult vars for parameter lists
-      case Term.ParamClause(List(MultParam(name, tpe)), mod) =>
+      case Term.ParamClause(List(mult @ MultParam(name, tpe)), mod) =>
         val names = bindings.getOrThrow[List[Term.Name]](name)
         val types = bindings.getOrThrow[List[Type]](tpe)
+        requireMinimum("mult1", names.size, MultParam.minimum(mult).getOrElse(0))
         if names.size != types.size then
           throw new Exception(
             s"@mult parameter size mismatch: ${names.size} names but ${types.size} types."
@@ -45,8 +49,9 @@ case class Rewriter()(using
               .map((n, t) => Term.Param(mod.toList, n, Some(t), None))
           Term.ParamClause(params, mod)
       // Mult vars for argument lists
-      case Term.ArgClause(List(MultName(name)), mod) =>
+      case Term.ArgClause(List(mult @ MultName(name)), mod) =>
         val args = bindings.getOrThrow[List[Term]](name)
+        requireMinimum("mult1", args.size, MultName.minimum(mult).getOrElse(0))
         Term.ArgClause(args, mod)
       // Mult vars for statement blocks
       case Term.Block(stats) if stats.exists {
@@ -54,8 +59,10 @@ case class Rewriter()(using
             case _           => false
           } =>
         Term.Block(stats.flatMap {
-          case MultName(name) =>
-            bindings.getOrThrow[List[Stat]](name)
+          case mult @ MultName(name) =>
+            val bound = bindings.getOrThrow[List[Stat]](name)
+            requireMinimum("mult1", bound.size, MultName.minimum(mult).getOrElse(0))
+            bound
           case stat => List(stat)
         })
       // Bound variables

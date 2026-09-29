@@ -27,6 +27,8 @@ sealed trait Binding:
 object Binding:
   case class TermValue(term: Term) extends Binding:
     val handler = AsBinding.termAsBinding
+  case class StatValue(stat: Stat) extends Binding:
+    val handler = AsBinding.statAsBinding
   case class TypeValue(tpe: Type) extends Binding:
     val handler = AsBinding.typeAsBinding
   case class MultiTermValue(terms: List[Term]) extends Binding:
@@ -43,10 +45,17 @@ trait AsBinding[T]:
   def extract(b: Binding): Option[T]
 
 object AsBinding:
+  given statAsBinding: AsBinding[Stat] with
+    def wrap(stat: Stat) = Binding.StatValue(stat)
+    def extract(b: Binding) = b match
+      case Binding.StatValue(s) => Some(s)
+      case Binding.TermValue(t) => Some(t)
+      case _                    => None
   given termAsBinding: AsBinding[Term] with
     def wrap(term: Term) = Binding.TermValue(term)
     def extract(b: Binding) = b match
       case Binding.TermValue(t) => Some(t)
+      case Binding.StatValue(t: Term) => Some(t)
       case _                    => None
   given typeAsBinding: AsBinding[Type] with
     def wrap(tpe: Type) = Binding.TypeValue(tpe)

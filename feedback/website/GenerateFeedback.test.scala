@@ -17,7 +17,7 @@ class GenerateFeedbackTest extends munit.FunSuite:
     val start = original.indexOf(before)
     val firstFile = ujson.Obj(
       "schemaVersion" -> 1,
-      "file" -> "src/Sample.scala",
+      "file" -> root.resolve("device/private/Sample.scala").toString,
       "limit" -> 10,
       "truncated" -> false,
       "initial" -> original,
@@ -32,15 +32,26 @@ class GenerateFeedbackTest extends munit.FunSuite:
         "after" -> after,
         "code" -> rewritten
       )),
-      "lints" -> ujson.Arr(ujson.Obj(
-        "rule" -> "Var Usage",
-        "description" -> "avoid mutation",
-        "start" -> 0,
-        "end" -> 3,
-        "line" -> 1,
-        "column" -> 1,
-        "code" -> "val line1 = 1"
-      ))
+      "lints" -> ujson.Arr(
+        ujson.Obj(
+          "rule" -> "Var Usage",
+          "description" -> "avoid mutation",
+          "start" -> 0,
+          "end" -> 3,
+          "line" -> 1,
+          "column" -> 1,
+          "code" -> "val line1 = 1"
+        ),
+        ujson.Obj(
+          "rule" -> "Var Usage",
+          "description" -> "avoid mutation",
+          "start" -> rewritten.indexOf("val line40"),
+          "end" -> (rewritten.indexOf("val line40") + 3),
+          "line" -> 40,
+          "column" -> 1,
+          "code" -> "val line40 = 40"
+        )
+      )
     )
     val secondFile = ujson.Obj(
       "schemaVersion" -> 1,
@@ -59,7 +70,15 @@ class GenerateFeedbackTest extends munit.FunSuite:
         "after" -> "1",
         "code" -> "val answer = 1"
       )),
-      "lints" -> ujson.Arr()
+      "lints" -> ujson.Arr(ujson.Obj(
+        "rule" -> "Var Usage",
+        "description" -> "avoid mutation",
+        "start" -> 0,
+        "end" -> 3,
+        "line" -> 1,
+        "column" -> 1,
+        "code" -> "val answer = 1"
+      ))
     )
     Files.writeString(
       histories.resolve("student-0.history.json"),
@@ -128,14 +147,22 @@ class GenerateFeedbackTest extends munit.FunSuite:
     )
     val steps = payload("histories")(0)("steps").arr
     assertEquals(payload("histories").arr.size, 2)
-    assertEquals(payload("histories")(1)("file").str, "src/Other.scala")
+    assertEquals(payload("histories")(0)("file").str, "Sample.scala")
+    assertEquals(payload("histories")(1)("file").str, "Other.scala")
+    assertEquals(steps(0)("location").str, "Sample.scala:10:1")
+    assertEquals(steps(1)("location").str, "Sample.scala:1:1")
+    assert(!html.contains(root.resolve("device/private").toString))
+    assert(!html.contains("src/Other.scala"))
     assertEquals(payload("histories")(1)("steps")(0)("rule").str, "Second Rewrite")
     assertEquals(payload("histories")(1)("steps")(0)("id").str, "rewrite-1")
+    assertEquals(payload("histories")(1)("steps")(1)("id").str, "observation-1")
     assertEquals(
       steps.map(_("kind").str).toSeq,
       Seq("rewrite", "observation")
     )
     assertEquals(steps.count(_("rule").str == "Var Usage"), 1)
+    assertEquals(steps(1)("locations").arr.size, 2)
+    assertEquals(steps(1)("locations")(1)("line").num.toInt, 40)
     assertEquals(steps(0)("explanation").str, "rewrite it")
     assertEquals(steps(1)("explanation").str, "avoid mutation")
     assertEquals(steps(0)("code").str, rewritten)
@@ -145,6 +172,11 @@ class GenerateFeedbackTest extends munit.FunSuite:
     assert(!html.contains("lines omitted"))
     assert(html.contains("codeView.scrollTop=previousTop;"))
     assert(html.contains("data-expand-${direction}"))
+    assert(html.contains("let current=0,preview=false"))
+    assert(html.contains("progress data-progress max=\"3\""))
+    assert(!html.contains("HIGHLIGHT_MS"))
+    assert(html.contains("--accent:#007480"))
+    assert(html.contains("width:min(1480px"))
     def localPage(student: String): String =
       Files.readString(Files.list(output).toArray.map(_.asInstanceOf[Path])
         .find(_.getFileName.toString.contains(student)).get)

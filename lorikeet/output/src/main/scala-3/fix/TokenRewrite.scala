@@ -5,6 +5,7 @@ object TokenRewrite:
   val text = "oldName;"
   // oldName;
   val result = newName
+  val sameLine = newName; val other = 2
   val plainTrue = true
   val plainFalse = false
   val negatedTrue = false

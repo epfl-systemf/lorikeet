@@ -17,13 +17,18 @@ object MetaVar:
       Some(name.stripPrefix("?"))
     case _ => None
 
-/** @mult annotation on parameters and arguments */
+/** @mult (zero or more) and @mult1 (one or more). */
 private[metasyntax] object MultAnnot:
-  def unapply(tree: Tree): Boolean = tree match
-    case Mod.Annot(Init(Type.Name("mult"), _, Seq())) => true
-    case _                                            => false
+  def minimum(tree: Tree): Option[Int] = tree match
+    case Mod.Annot(Init(Type.Name("mult"), _, Seq())) => Some(0)
+    case Mod.Annot(Init(Type.Name("mult1"), _, Seq())) => Some(1)
+    case _ => None
+  def unapply(tree: Tree): Boolean = minimum(tree).nonEmpty
 
 object MultName:
+  def minimum(tree: Tree): Option[Int] = tree match
+    case Term.Annotate(MetaVar(_), mods) => mods.flatMap(MultAnnot.minimum).maxOption
+    case _ => None
   def unapply(tree: Tree): Option[String] = tree match
     case Term.Annotate(
           MetaVar(name),
@@ -34,6 +39,9 @@ object MultName:
 
 /** Base trait for @mult parameter extractors */
 private[metasyntax] trait MultParamBase[T]:
+  def minimum(tree: Tree): Option[Int] = tree match
+    case Term.Param(mods, _, _, _) => mods.flatMap(MultAnnot.minimum).maxOption
+    case _ => None
   def transformName(name: Term.Name): T
   def transformType(tpe: Type.Name): T
   def unapply(tree: Tree): Option[(T, T)] =

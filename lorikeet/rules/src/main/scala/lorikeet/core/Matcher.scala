@@ -67,6 +67,7 @@ case class Matcher()(using
           case (_: Term, p: Pat)  =>
             // Special handling due to special meaning of backticks in patterns
             compareTrees(Pat.Var(Term.Name("?" + name)), cand, bindings)
+          case (_: Term, stat: Stat) => bindings.add[Stat](name, stat)
           case _ => None
 
       // Optional semantic handling for fully qualified names in patterns
@@ -130,10 +131,7 @@ case class Matcher()(using
               patParams,
               candParams,
               bindings,
-              {
-                case MultParam(_, _) => true
-                case _               => false
-              },
+              MultParam.minimum,
               (multPat, taken, b) => {
                 multPat match
                   case MultParam(name, tpe) =>
@@ -173,10 +171,7 @@ case class Matcher()(using
               patArgs,
               candArgs,
               bindings,
-              {
-                case MultName(_) => true
-                case _           => false
-              },
+              MultName.minimum,
               (multPat, taken, b) => {
                 multPat match
                   case MultName(name) => b.add[List[Term]](name, taken)
@@ -194,10 +189,7 @@ case class Matcher()(using
               patStats,
               candStats,
               bindings,
-              {
-                case MultName(_) => true
-                case _           => false
-              },
+              MultName.minimum,
               (multPat, taken, b) => {
                 multPat match
                   case MultName(name) => b.add[List[Stat]](name, taken)
@@ -208,7 +200,26 @@ case class Matcher()(using
           case _ => None
 
       // General case
-      case _ => compareProducts(pat, cand, bindings)
+      case _ => compareDeclarationProducts(pat, cand, bindings)
+
+  private def modifiers(tree: Tree): Option[List[Mod]] = tree match
+    case definition: Defn.Def => Some(definition.mods)
+    case definition: Defn.Val => Some(definition.mods)
+    case definition: Defn.Var => Some(definition.mods)
+    case _ => None
+
+  private def compareDeclarationProducts(
+      pat: Tree,
+      cand: Tree,
+      bindings: Bindings,
+      skipFields: Set[String] = Set.empty
+  ): MatchResult =
+    (modifiers(pat), modifiers(cand)) match
+      case (Some(required), Some(actual)) if required.nonEmpty =>
+        if required.forall(mod => actual.exists(_.structure == mod.structure)) then
+          compareProducts(pat, cand, bindings, skipFields + "mods")
+        else None
+      case _ => compareProducts(pat, cand, bindings, skipFields)
 
   /** Handle optional type ascriptions with semantic type matching when pattern
     * has type but candidate doesn't
@@ -235,7 +246,7 @@ case class Matcher()(using
     typeMatch.flatMap(newBindings =>
       typeFieldName match
         case Some(fieldName) =>
-          compareProducts(pat, cand, newBindings, Set(fieldName))
+          compareDeclarationProducts(pat, cand, newBindings, Set(fieldName))
         case None => // Case of actual ascriptions
           compareTrees(pat, cand, newBindings)
     )

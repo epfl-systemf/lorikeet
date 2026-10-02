@@ -88,7 +88,7 @@ class ContextualBooleanRulesTest extends munit.FunSuite:
     val steps = history("steps").arr
     val rules = steps.map(_("rule").str).toSet
     assert(rules.contains("Unused if result"), s"$rules in $root")
-    assert(rules.contains("Extract print from Boolean if"), s"$rules in $root")
+    assert(rules.contains("Extract effect from Boolean if"), s"$rules in $root")
     assert(rules.contains("Identical if branches"), s"$rules in $root")
     val lints = history("lints").arr.map(_("rule").str).toSet
     assert(Set("Uppercase parameter", "Uppercase function", "Uppercase val",

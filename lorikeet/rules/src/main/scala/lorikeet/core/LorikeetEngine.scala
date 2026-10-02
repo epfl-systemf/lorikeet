@@ -26,7 +26,8 @@ case class CustomRule(
     rewrite: Option[Tree],
     rewriteSource: Option[String],
     matchOptions: MatchOptions,
-    description: Option[String]
+    description: Option[String],
+    stableBooleanBindings: List[String]
 )
 
 case class TokenRule(
@@ -174,6 +175,28 @@ object LorikeetEngine:
     var tree = doc.tree
     var steps = List.empty[RewriteStep]
 
+    val stableNames = doc.tree.collect {
+      case value: Defn.Val =>
+        value.pats.collect { case Pat.Var(name) => name.symbol }
+      case param: Term.Param
+          if !param.mods.exists(_.isInstanceOf[Mod.VarParam]) &&
+            !param.decltpe.exists(_.isInstanceOf[Type.ByName]) =>
+        List(param.name.symbol)
+    }.flatten.filter(_ != Symbol.None).toSet
+
+    def stableBoolean(term: Term): Boolean = term match
+      case name: Term.Name =>
+        stableNames(name.symbol) &&
+          SemanticTypeMatching.matchTreeType(
+            name, Type.Name("Boolean"), Bindings.empty
+          ).nonEmpty
+      case _ => false
+
+    def allowedBindings(rule: CustomRule, bindings: Bindings): Boolean =
+      rule.stableBooleanBindings.forall { name =>
+        bindings.get[Term](name).exists(stableBoolean)
+      }
+
     // Scalafix callers without history output still expect diagnostics on the
     // original document; generated feedback instead uses final history lints.
     val legacyLints =
@@ -185,7 +208,8 @@ object LorikeetEngine:
             Option.when(enabled && lintLevel != LintLevel.None) {
               val matcher = Matcher()(using doc, rule.matchOptions)
               Option.when(
-                matcher.compare(rule.pattern, candidate, Bindings.empty).nonEmpty
+                matcher.compare(rule.pattern, candidate, Bindings.empty)
+                  .exists(allowedBindings(rule, _))
               )(Patch.lint(LintMessage(candidate.pos, rule.name, rule.description)))
             }.flatten
           }.headOption.getOrElse(Patch.empty)
@@ -235,7 +259,7 @@ object LorikeetEngine:
               case candidate
                   if candidate.pos.start >= 0 && matcher
                     .compare(rule.pattern, candidate, Bindings.empty)
-                    .nonEmpty =>
+                    .exists(allowedBindings(rule, _)) =>
                 record(
                   rule.name,
                   rule.description,
@@ -358,10 +382,26 @@ object LorikeetEngine:
                   oldVal.rhs.structure == newLast.structure =>
               val discarded = code.substring(oldVal.pos.start, oldVal.rhs.pos.start) +
                 code.substring(oldVal.pos.end, oldName.pos.start)
-              Option.when(!discarded.contains("//") && !discarded.contains("/*"))(
-                (oldVal.pos.start, oldName.pos.end,
-                  code.substring(oldVal.rhs.pos.start, oldVal.rhs.pos.end))
-              )
+              val shift = oldVal.rhs.pos.startColumn - oldVal.pos.startColumn
+              val lines = code.substring(oldVal.rhs.pos.start, oldVal.rhs.pos.end)
+                .split("\n", -1).toList
+              val prefix = " " * shift.max(0)
+              if shift < 0 || discarded.contains("//") || discarded.contains("/*") ||
+                  lines.tail.exists(line => line.trim.nonEmpty && !line.startsWith(prefix))
+              then None
+              else
+                val replacement = (lines.head :: lines.tail.map(line =>
+                  if line.trim.isEmpty then "" else line.stripPrefix(prefix)
+                )).mkString("\n")
+                val updated = code.substring(0, oldVal.pos.start) + replacement +
+                  code.substring(oldName.pos.end)
+                val valid = scala.util.Try(Config.parseSource(updated, filename)).toOption
+                  .exists(_.collect {
+                    case term: Term
+                        if term.pos.start == oldVal.pos.start &&
+                          term.structure == newLast.structure => true
+                  }.nonEmpty)
+                Option.when(valid)((oldVal.pos.start, oldName.pos.end, replacement))
             case _ => None
         case _ => None
 
@@ -534,7 +574,8 @@ object LorikeetEngine:
             }
             .zipWithIndex
             .flatMap { case (candidate, candidateOrder) =>
-              matcher.compare(rule.pattern, candidate, Bindings.empty).flatMap {
+              matcher.compare(rule.pattern, candidate, Bindings.empty)
+                .filter(allowedBindings(rule, _)).flatMap {
                 bindings =>
                   val replacementTree = rewriter.applyBindings(rule.rewrite.get, bindings)
                   if candidate.structure == replacementTree.structure then None

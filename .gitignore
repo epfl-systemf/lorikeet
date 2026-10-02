@@ -50,7 +50,7 @@ feedback/website/generated/
 feedback/website/logs/
 feedback/website/*.bak
 /feedback/feedback_automation/output/
-/student-lab-submissions/
-!/student-lab-submissions/test
+/student-lab-submissions/*
+!/student-lab-submissions/test/
 /scaffold_projects
 !/scaffold_projects/test

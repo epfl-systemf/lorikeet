@@ -3,10 +3,15 @@
   const session = crypto.randomUUID();
   const prefix = 'lorikeet.feedback.' + report.report_id + '.';
   const ledger = new Map();
+  const rated = new Set();
   const online = location.protocol === 'http:' || location.protocol === 'https:';
   let token = null, sending = false;
-  function persist(record){
+  function remember(record){
     ledger.set(record.event.event_id, record);
+    if(record.event.event_type==='feedback_rating')rated.add(record.event.issue.id);
+  }
+  function persist(record){
+    remember(record);
     try{localStorage.setItem(prefix + record.event.event_id, JSON.stringify(record));}
     catch{/* Keep the event in memory when browser storage is unavailable. */}
   }
@@ -14,10 +19,14 @@
     for(let i=0;i<localStorage.length;i++){
       const key=localStorage.key(i);
       if(key.startsWith(prefix)){
-        try{const record=JSON.parse(localStorage.getItem(key));if(record.event?.event_id)ledger.set(record.event.event_id,record);}catch{}
+        try{const record=JSON.parse(localStorage.getItem(key));if(record.event?.event_id)remember(record);}catch{}
       }
     }
   }catch{/* Browser storage may be unavailable. */}
+  window.lorikeetFeedback={hasRating:id=>{
+    const issue=report.issues[id];
+    return !!issue&&rated.has(issue.id);
+  }};
   async function request(url, options={}){
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),5000);
     try{return await fetch(url,{...options,signal:controller.signal,cache:'no-store'});}
@@ -51,6 +60,7 @@
     const id=button.closest('[data-feedback-id]')?.dataset.feedbackId;if(!id)return;
     button.parentElement.querySelectorAll('[data-rating]').forEach(peer=>peer.classList.toggle('selected',peer===button));
     record('feedback_rating',id,button.dataset.rating);
+    button.dispatchEvent(new CustomEvent('feedbackrated',{bubbles:true,detail:{id}}));
   });
   Object.keys(report.issues).forEach(id=>record('issue_loaded',id));
   window.addEventListener('online',flush);

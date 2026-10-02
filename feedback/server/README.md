@@ -72,7 +72,7 @@ Starting another grading run moves prior `grading_*` artifacts, `.tmp`, and the 
 
 Publishing reads that run's result manifest and full-code histories; renders one HTML page per submission in `deployment/public/<lab>/`; replaces only the chosen lab's local public directory; and writes `deployment/private/links/<lab>.csv`. It creates/reuses `deployment/private/hmac.key` so the same lab/submission keeps the same opaque URL on later publishes.
 
-Back up `private/hmac.key` so republishing keeps URLs stable. Never upload `private/`. After checking the generated pages and CSV, transfer only the chosen lab's public pages. From the repository root on the build machine:
+The local `feedback/feedback_automation/output/feedback/overview.html` contains the submission-to-report correspondence. Back it up securely before the next grading run archives it. Also back up `deployment/private/links/<lab>.csv` and `deployment/private/hmac.key` (the key keeps republished URLs stable). **Never upload the overview, CSV, key, or any `private/` directory to the public host.** After checking the pages and CSV locally, transfer only the chosen lab's public pages. From the repository root on the build machine:
 
 ```bash
 rsync -a --delete --chmod=D755,F644 \

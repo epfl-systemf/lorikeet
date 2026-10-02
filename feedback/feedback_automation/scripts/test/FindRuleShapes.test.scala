@@ -87,6 +87,13 @@ class FindRuleShapesTest extends munit.FunSuite:
         |    val val1 = (findByNameAndPrint(entry.nextSibling(), name))
         |    val1
         |
+        |  def multilineFinal(entry: cs214.Entry): Boolean =
+        |    val result =
+        |      if entry.hasNextSibling() then
+        |        entry.path().nonEmpty
+        |      else entry.isDirectory()
+        |    result
+        |
         |  def nestedChildren(entry: cs214.Entry, name: String): Boolean =
         |    if entry.isDirectory() then
         |      if entry.hasChildren() then
@@ -179,13 +186,14 @@ class FindRuleShapesTest extends munit.FunSuite:
     assert(Set("Search with early returns", "Final return", "0 == Long", "1 != Int",
       "Evaluate before true", "Evaluate before true after statements",
       "Combine equal Boolean branches", "Inline final val",
-      "Extract print from Boolean if",
+      "Extract effect from Boolean if",
       "Decouple value and side-effect form nested ifs").subsetOf(rules), s"$rules in $root")
     val finalCode = steps.last("code").str
     assert(finalCode.contains("if here then println(entry.path())"))
     assert(finalCode.contains("var found"))
     assert(!finalCode.contains("|| true"))
     assert(!finalCode.contains("val val1 ="))
+    assert(!finalCode.contains("val result ="))
     assert(finalCode.contains("def siblingThroughVal(entry: cs214.Entry, name: String): Boolean =\n    findByNameAndPrint(entry.nextSibling(), name)"))
     assert(finalCode.contains("if foundHere then println(entry.path())"))
     assert(!finalCode.contains("else if !entry.isDirectory() && entry.size() == 0 then"))

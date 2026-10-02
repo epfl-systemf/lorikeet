@@ -173,9 +173,18 @@ class GenerateFeedbackTest extends munit.FunSuite:
     assert(html.contains("codeView.scrollTop=previousTop;"))
     assert(html.contains("data-expand-${direction}"))
     assert(html.contains("let current=0,preview=false"))
-    assert(html.contains("progress data-progress max=\"3\""))
+    assert(html.contains("data-step-dots"))
+    assert(html.contains("data-rating-slot"))
+    val logPayload = ujson.read(
+      "(?s)<script type=\"application/json\" id=\"feedback-log-data\">(.*?)</script>".r
+        .findFirstMatchIn(html).get.group(1)
+    )
+    assert(Set("rewrite-0-highlight", "rewrite-0-result", "observation-0")
+      .subsetOf(logPayload("issues").obj.keySet.toSet))
+    assertEquals(logPayload("issues")("rewrite-0-highlight")("rule").str, "Rewrite (highlight)")
+    assertEquals(logPayload("issues")("rewrite-0-result")("rule").str, "Rewrite (rewritten code)")
     assert(!html.contains("HIGHLIGHT_MS"))
-    assert(html.contains("--accent:#007480"))
+    assert(html.contains("--accent:var(--color-rouge)"))
     assert(html.contains("width:min(1480px"))
     def localPage(student: String): String =
       Files.readString(Files.list(output).toArray.map(_.asInstanceOf[Path])

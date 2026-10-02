@@ -68,7 +68,14 @@ object GenerateFeedback:
         sha256(run + "/" + submission).take(8) + ".html"
     )(_.split('/').last + ".html")
     val header =
-      s"""<header class="page-header"><div><h1>CS-214 Code Quality Feedback</h1><p>Step through suggested rewrites and lints about your code</p></div><div class="run-label">${escape(submission)}</div></header>"""
+      s"""|<header class="page-header">
+          |  <p>
+          |    Hi! We, the people of the <a href="https://cs-214.epfl.ch/">CS-214</a> course staff and the <a href="https://systemf.epfl.ch/">SYSTEMF</a>, have been developing a new experimental way for giving you more personalized <b>Code Quality Feedback</b>. As usual, you can find code quality tips in the <a href="https://cs-214.epfl.ch/#debriefs">Debriefs</a>. This page offers some interactive suggestions, specifically for you! You can find your submitted code in the snippet below. (Yes, we do look at it!) You can use the buttons below to see your code transform!
+          |  </p>
+          |  <p>
+          |    Small disclaimer: This is an experimental research project, so beware. There might be some mistakes (and code-style opinions ^^), don't take everything blindly. If you spot any mistakes, you can report them <a href="https://github.com/epfl-systemf/lorikeet/issues/new">here</a>.
+          |  </p>
+          |</header>""".stripMargin
     val failure = result.status match
       case "missing_files" => Some("We couldn't process your submission: a required file was missing.")
       case "compile_error" => Some("We couldn't process your submission: it did not compile.")
@@ -144,12 +151,14 @@ object GenerateFeedback:
         step.value("location") = ujson.Str(
           s"${history("file").str}:${step("line").num.toInt}:${step("column").num.toInt}"
         )
-        feedbackItems(id) = FeedbackItem(
+        val item = FeedbackItem(
           step("rule").str,
           history("file").str,
           step("line").num.toInt,
           step("column").num.toInt
         )
+        feedbackItems(id + "-highlight") = item.copy(rule = item.rule + " (highlight)")
+        feedbackItems(id + "-result") = item.copy(rule = item.rule + " (rewritten code)")
       }
     }
 
@@ -209,10 +218,33 @@ object GenerateFeedback:
         if history.value.get("truncated").exists(_.bool) then
           s"<p class=\"limit-warning\">The rewrite limit of ${history("limit").num.toInt} was reached; more patterns may still match.</p>"
         else ""
-      val stageCount = steps.map(step => if step("kind").str == "rewrite" then 2 else 1).sum
-      s"""<section class="timeline" data-history-index="$index"><div class="timeline-heading"><div><span class="eyebrow">Feedback timeline</span><h2>${escape(
-          history("file").str
-        )}</h2></div><span class="step-count" data-step-count></span></div><div class="workspace"><div class="code-panel"><div class="code-toolbar"><span data-version-label>Original</span><span class="context-tools"><span data-context-label></span><span>Scala · Prism</span></span></div><div class="code-view"><table class="code-table" role="presentation"><tbody data-code></tbody></table></div></div><aside class="change-card" data-change-card></aside></div><nav class="timeline-nav" aria-label="Feedback navigation"><button type="button" class="secondary" data-back>← Back</button><div class="progress-wrap"><progress data-progress max="$stageCount" value="0"></progress><span data-progress-label></span></div><button type="button" data-forward>Next feedback →</button></nav><section class="history" data-history hidden><div class="history-title"><span class="eyebrow">History</span><h3>Changes and observations</h3></div><ol data-history-list></ol></section>$warning</section>"""
+      s"""|<section class="timeline" data-history-index="$index">
+          |  <div class="workspace">
+          |    <div class="code-panel">
+          |      <div class="code-toolbar">
+          |        <span data-version-label>Original</span>
+          |        <span class="context-tools">
+          |          <span data-context-label></span>
+          |          <span>Scala</span>
+          |        </span>
+          |      </div>
+          |      <div class="code-view"><table class="code-table" role="presentation">
+          |        <tbody data-code></tbody></table>
+          |      </div>
+          |    </div>
+          |    <aside class="change-card" data-change-card></aside>
+          |  </div>
+          |  <nav class="timeline-nav" aria-label="Feedback navigation">
+          |    <div class="progress-wrap">
+          |      <ol class="step-list" data-step-dots aria-label="Feedback steps"></ol>
+          |      <span data-progress-label></span>
+          |    </div>
+          |    <button type="button" class="secondary" aria-keyshortcuts="ArrowLeft" data-back>Back (←)</button>
+          |    <div class="nav-action"><button type="button" aria-keyshortcuts="ArrowRight" data-forward>Next feedback (→)</button><div data-rating-slot hidden></div></div>
+          |  </nav>
+          |  <section class="history" data-history hidden><div class="history-title"><span class="eyebrow">History</span><h3>Changes and observations</h3></div><ol data-history-list></ol>
+          |  </section>$warning
+          |</section>""".stripMargin
     }.mkString
     val empty =
       if visibleHistories.nonEmpty then ""

@@ -11,6 +11,7 @@ case class RuleConfig(
     matchFqn: Option[Boolean],
     matchBlocks: Option[Boolean],
     onlyPackages: Option[List[String]],
+    stableBooleanBindings: Option[List[String]],
     description: Option[String],
     pattern: String,
     rewrite: Option[String]
@@ -98,7 +99,8 @@ object Config:
         rewriteTree,
         rule.rewrite,
         matchOptions,
-        rule.description
+        rule.description,
+        rule.stableBooleanBindings.getOrElse(Nil)
       )
     }
 

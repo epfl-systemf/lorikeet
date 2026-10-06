@@ -130,7 +130,7 @@ object FeedbackReview:
     val submission = logText(objectValue("submission"), "submission", 500)
     val run = logText(objectValue("run"), "run", 300)
     val eventType = logText(objectValue("event_type"), "event_type", 32)
-    if !Set("issue_loaded", "feedback_view", "feedback_rating", "geek_mode_enabled", "geek_mode_disabled")(eventType) then
+    if !eventType.matches("[a-z][a-z0-9_]*") then
       throw IllegalArgumentException("Unknown feedback event type")
     val rating = objectValue("rating") match
       case ujson.Null                                             => None
@@ -238,7 +238,7 @@ object FeedbackReview:
 
   private def summaryRows(events: Seq[LogEvent]): Seq[SummaryRow] =
     val rows = mutable.Map.empty[(String, String, String), SummaryRow]
-    events.filterNot(event => Set("geek_mode_enabled", "geek_mode_disabled")(event.eventType)).foreach { event =>
+    events.filter(event => Set("issue_loaded", "feedback_view", "feedback_rating")(event.eventType)).foreach { event =>
       val key = (event.sessionId, event.reportId, event.issue.id)
       val row = rows.getOrElseUpdate(
         key,

@@ -321,9 +321,20 @@ class GenerateFeedbackTest extends munit.FunSuite:
         .POST(HttpRequest.BodyPublishers.ofString(geekEvent.render()))
         .build()
       assertEquals(client.send(geekRequest, HttpResponse.BodyHandlers.ofString()).statusCode(), 200)
+      geekEvent("event_id") = UUID.randomUUID().toString
+      geekEvent("event_type") = "future_signal"
+      val futureGeekRequest = HttpRequest
+        .newBuilder(URI.create(base + "/api/log-events"))
+        .header("Content-Type", "application/json")
+        .header("Origin", base)
+        .header("X-Log-Token", token)
+        .POST(HttpRequest.BodyPublishers.ofString(geekEvent.render()))
+        .build()
+      assertEquals(client.send(futureGeekRequest, HttpResponse.BodyHandlers.ofString()).statusCode(), 200)
       val events = get("/api/logs/events")
       assertEquals(events.statusCode(), 200, events.body())
       assert(events.body().contains("geek_mode_enabled"))
+      assert(events.body().contains("future_signal"))
       val summary = get("/api/logs/summary")
       assertEquals(summary.statusCode(), 200)
       assert(summary.body().contains("student-0"))

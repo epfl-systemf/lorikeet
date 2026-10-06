@@ -183,10 +183,8 @@ object FeedbackServer:
     if !ReportId.matches(reportId) then
       throw IllegalArgumentException("Invalid report_id")
     val eventType = text(json, "event_type", 32)
-    if !Set("issue_loaded", "feedback_view", "feedback_rating").contains(
-        eventType
-      )
-    then throw IllegalArgumentException("Invalid event_type")
+    if !eventType.matches("[a-z][a-z0-9_]*") then
+      throw IllegalArgumentException("Invalid event_type")
     val timestamp = text(json, "timestamp", 40)
     try Instant.parse(timestamp)
     catch

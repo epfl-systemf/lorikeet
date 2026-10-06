@@ -64,6 +64,31 @@ class FeedbackServerTest extends munit.FunSuite:
         client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode(),
         200
       )
+      val futureEvent = event.copy()
+      futureEvent("event_id") = UUID.randomUUID().toString
+      futureEvent("event_type") = "future_signal"
+      val futureRequest = HttpRequest
+        .newBuilder(URI.create(base + "/api/events"))
+        .header("Content-Type", "application/json")
+        .header("Origin", base)
+        .POST(HttpRequest.BodyPublishers.ofString(futureEvent.render()))
+        .build()
+      assertEquals(
+        client.send(futureRequest, HttpResponse.BodyHandlers.ofString()).statusCode(),
+        200
+      )
+      futureEvent("event_id") = UUID.randomUUID().toString
+      futureEvent("event_type") = "future-signal"
+      val invalidFutureRequest = HttpRequest
+        .newBuilder(URI.create(base + "/api/events"))
+        .header("Content-Type", "application/json")
+        .header("Origin", base)
+        .POST(HttpRequest.BodyPublishers.ofString(futureEvent.render()))
+        .build()
+      assertEquals(
+        client.send(invalidFutureRequest, HttpResponse.BodyHandlers.ofString()).statusCode(),
+        400
+      )
       val malformed = HttpRequest
         .newBuilder(URI.create(base + "/api/events"))
         .header("Content-Type", "application/json")
@@ -98,6 +123,6 @@ class FeedbackServerTest extends munit.FunSuite:
               result.getInt(1)
             }
         }
-      assertEquals(count, 1)
+      assertEquals(count, 2)
     finally running.close()
   }

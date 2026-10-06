@@ -22,10 +22,12 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);line-height:1.55}
 button{font:inherit}
+a{color:var(--accent-secondary);font-family:var(--mono);font-weight:600;text-decoration-line:underline;text-decoration-style:dashed;text-decoration-thickness:1px;text-underline-offset:3px}a:hover{color:var(--color-canard);background:var(--accent-soft);text-decoration-style:solid}a:focus-visible{outline:3px solid rgba(0,116,128,.35);outline-offset:2px}
 .shell{width:min(1480px,calc(100% - 48px));margin:0 auto;padding:36px 0 80px}
-.page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;margin-bottom:32px}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:40px;margin-bottom:32px}
 .page-header h1{margin:4px 0 8px;font-size:clamp(1.8rem,3vw,2.8rem);line-height:1.15;letter-spacing:-.025em;font-weight:600}
 .page-header p{font-weight:24px;margin:0;color:var(--ink)}
+.page-header>p{flex:1}.disclaimer{flex:0 1 380px;padding:16px;border:1px solid var(--line);border-left:4px solid var(--accent-secondary);background:var(--surface)}.disclaimer p{margin:4px 0 0;font-size:.85rem}
 .eyebrow{color:var(--accent);font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
 .run-label{display:grid;gap:3px;min-width:180px;padding:13px 16px;border:1px solid var(--line);border-radius:3px;background:var(--surface);font:600 .78rem var(--mono)}
 .run-label span{color:var(--muted);font-weight:400}
@@ -36,14 +38,15 @@ button{font:inherit}
 .timeline-heading .location{display:block;margin-top:3px}
 .step-count{flex:none;padding:6px 10px;border:1px solid var(--line);background:white;color:var(--accent);font-size:.75rem;font-weight:600}
 .workspace{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,.7fr);height:472px}
-.code-panel{min-width:0;background:var(--code);color:var(--code-ink)}
+.code-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-width:0;min-height:0;background:var(--code);color:var(--code-ink)}
 .code-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid #34413b;color:#9fb0a7;font:11px var(--mono)}
+.code-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-top:1px solid #34413b;color:#9fb0a7;font:11px var(--mono)}
 .context-tools{display:flex;align-items:center;justify-content:flex-end;gap:12px}
-.code-view{height:430px;overflow:auto;font:13px/1.72 var(--mono);tab-size:2}
+.code-view{min-height:0;overflow:auto;font:13px/1.72 var(--mono);tab-size:2}
 .code-table{width:max-content;min-width:100%;border-collapse:collapse;table-layout:auto}
 .code-row td{height:22px;vertical-align:top}.change-gutter{width:5px;padding:0;border-left:4px solid transparent}.focus-line .change-gutter{border-left-color:#b51f1f}.focus-line .code-line{background:#243d40}.line-number{width:48px;padding:0 10px;color:#9eabb0;background:#25242b;border-right:1px solid #413d3a;text-align:right;user-select:none}.code-line{min-width:600px;padding:0 16px;white-space:pre}.code-line code{font:inherit;color:inherit;text-shadow:none}
 .context-gap td{padding:0;border-block:1px solid #34413b;background:#202a26}.context-gap button{width:100%;border-radius:0;padding:7px 14px;background:transparent;color:#9fc7b7;font:11px var(--mono);text-align:left}.context-gap button:hover{background:#2b3933;color:#d9e7df}
-.change-card{min-height:0;overflow:auto;padding:24px;border-left:1px solid var(--line);background:var(--surface)}
+.change-card{min-height:0;max-height:100%;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:24px;border-left:1px solid var(--line);background:var(--surface)}
 .change-card h3{margin:5px 0 3px;font-size:1.25rem;line-height:1.25}
 .change-card p{font-size:.88rem;color:#46504b}
 .change-card .original-copy{margin-top:28px;color:var(--muted)}
@@ -54,17 +57,17 @@ button:disabled{opacity:.42;cursor:not-allowed}
 button:focus-visible{outline:3px solid rgba(0,116,128,.35);outline-offset:2px}
 .progress-wrap{display:flex;align-items:center;gap:12px;min-width:0}
 .step-list{display:flex;align-items:center;flex:1;min-width:0;margin:0;padding:5px 2px;overflow-x:auto;list-style:none}
-.step-list li{position:relative;flex:none}.step-list li:not(:last-child){flex:1 0 21px}.step-list li:not(:last-child)::after,.step-list li:not(:last-child)::before{content:"";position:absolute;top:10px;left:21px;width:calc(100% - 21px);border-top:2px solid var(--line)}
+.step-list li{position:relative;flex:none}.step-list li:not(:last-child){flex:1 0 48px}.step-list li:not(:last-child)::after,.step-list li:not(:last-child)::before{content:"";position:absolute;top:10px;left:21px;width:calc(100% - 21px);border-top:2px solid var(--line)}
 .step-list li:not(:last-child)::before{z-index:1;border-color:var(--accent-secondary);transform:scaleX(0);transform-origin:left;transition:transform .55s ease-out}
 .step-list li.line-colored:not(:last-child)::before{transform:scaleX(1)}
 .step-marker{display:grid;place-items:center;width:21px;height:21px;border:2px solid var(--line);border-radius:50%;background:white;color:var(--muted);font-size:12px;line-height:1}
 .step-marker.highlight{border-color:var(--accent-secondary);animation:highlight-border .55s ease-out}
-.step-marker.rewritten{border-color:var(--accent-secondary);background:var(--accent-secondary);animation:rewrite-fill .55s ease-out}
+.step-marker.improved{border-color:var(--accent-secondary);background:var(--accent-secondary);animation:improvement-fill .55s ease-out}
 .step-marker.complete{border-color:var(--accent-secondary);background:var(--accent-secondary)}
 .step-marker.locked{border:0;background:transparent}.step-marker.locked svg{width:20px;height:20px;fill:var(--muted)}
 @keyframes highlight-border{from{border-color:var(--line)}to{border-color:var(--accent-secondary)}}
-@keyframes rewrite-fill{from{background:white}to{background:var(--accent-secondary)}}
-@media(prefers-reduced-motion:reduce){.step-marker.highlight,.step-marker.rewritten{animation:none}.step-list li::before{transition:none!important}}
+@keyframes improvement-fill{from{background:white}to{background:var(--accent-secondary)}}
+@media(prefers-reduced-motion:reduce){.step-marker.highlight,.step-marker.improved{animation:none}.step-list li::before,.geek-drawer{transition:none!important}}
 .progress-wrap [data-progress-label]{min-width:36px;color:var(--muted);font:11px var(--mono);text-align:right}
 .timeline-nav [data-back]{width:92px}.nav-action{display:grid;align-items:center;width:330px;height:68px}.nav-action [data-forward]{justify-self:end;width:min(180px,100%)}.nav-action [data-rating-slot]{width:100%}
 [hidden]{display:none!important}
@@ -79,13 +82,15 @@ button:focus-visible{outline:3px solid rgba(0,116,128,.35);outline-offset:2px}
 .diff-table tr.remove{background:var(--remove);color:#722b23}.diff-table tr.add{background:var(--add);color:#174f34}
 .observation-note{padding:12px 14px;border-top:1px solid var(--line);background:#f7faf8;color:var(--muted);font-size:.82rem}
 .occurrences{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}.occurrences button{border:1px solid var(--line);background:white;color:var(--ink);font:11px var(--mono)}.occurrences button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+button.geek-toggle{position:fixed;z-index:21;top:clamp(110px,24vh,250px);right:0;border-radius:3px 0 0 3px;border-color:var(--accent-secondary);background:var(--accent-soft);color:var(--accent-secondary);writing-mode:vertical-rl;box-shadow:-3px 3px 0 var(--color-perle);transition:right .2s ease-out}button.geek-toggle:hover{background:var(--accent-secondary);color:white}.geek-drawer{position:fixed;z-index:20;top:0;right:0;display:grid;grid-template-rows:auto minmax(0,1fr);width:min(480px,100vw);height:100dvh;transform:translateX(100%);border-left:1px solid var(--line);background:var(--surface);box-shadow:-12px 0 32px rgba(22,25,29,.18);transition:transform .2s ease-out}.geek-drawer.is-open{transform:translateX(0)}.geek-drawer-header{padding:22px 24px;border-bottom:1px solid var(--line);background:white}.geek-drawer-body{min-height:0;overflow:auto;overscroll-behavior:contain;padding:24px}.geek-drawer-intro{margin:0 0 22px;color:var(--muted);font-size:.9rem}.geek-drawer-content{min-width:0}.geek-rule{margin:0}.geek-rule pre{max-width:100%;margin:5px 0 22px;padding:12px;overflow:auto;background:var(--code);color:var(--code-ink);font:12px/1.55 var(--mono);white-space:pre}.geek-rule code{font:inherit}.geek-empty{margin:0;color:var(--muted)}
+html.geek-mode .timeline{border-color:var(--accent-secondary)}html.geek-mode .geek-toggle{right:min(480px,100vw)}
 .rating{display:grid;grid-template-columns:minmax(0,1fr) 62px 62px;align-items:center;gap:7px;width:100%}.rating span{color:var(--ink);font-size:.82rem;font-weight:700;text-align:right;line-height:1.2}
 .rating button{width:62px;padding:6px 0;border:1px solid var(--line);background:white;color:var(--ink);font-size:.75rem}.rating button.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .empty-state,.limit-warning{padding:28px;border:1px solid var(--line);border-radius:3px;background:white}.empty-state h2{margin-top:0}.empty-state p{margin-bottom:0;color:var(--muted)}
 .limit-warning{margin:0 24px 24px;border-color:#edc3ba;background:#fff5f2;color:var(--danger);font-size:.85rem}
 .token.comment,.token.prolog,.token.doctype,.token.cdata{color:#819087}.token.punctuation{color:#b7c2bc}.token.namespace{opacity:.75}.token.property,.token.tag,.token.constant,.token.symbol,.token.deleted{color:#ff9685}.token.boolean,.token.number{color:#e6bd7a}.token.selector,.token.attr-name,.token.string,.token.char,.token.builtin,.token.inserted{color:#a8d7a9}.token.operator,.token.entity,.token.url{color:#d7dfda}.token.atrule,.token.attr-value,.token.keyword{color:#82bde9}.token.function,.token.class-name{color:#e6a5d2}.token.regex,.token.important,.token.variable{color:#f0cd72}
-@media(max-width:850px){.workspace{grid-template-columns:1fr;grid-template-rows:auto 190px;height:auto}.change-card{border-left:0;border-top:1px solid var(--line)}.page-header{align-items:flex-start;flex-direction:column}.run-label{width:100%}}
-@media(max-width:560px){.shell{width:calc(100% - 20px);padding-top:26px}.timeline-heading,.history{padding-inline:15px}.timeline-nav{grid-template-columns:92px minmax(0,1fr)}.progress-wrap{grid-column:1/-1;grid-row:1}.nav-action{width:100%;height:70px}.rating{grid-template-columns:minmax(0,1fr) 62px 62px}.rating span{grid-column:1/-1}.code-view{height:360px;font-size:11.5px}.code-line{min-width:480px}.history summary{grid-template-columns:30px minmax(0,1fr) 14px}.commit-location{display:none}}
+@media(max-width:850px){.workspace{grid-template-columns:1fr;grid-template-rows:472px 190px;height:auto}.change-card{border-left:0;border-top:1px solid var(--line)}.page-header{align-items:flex-start;flex-direction:column}.disclaimer{width:100%}.run-label{width:100%}}
+@media(max-width:560px){.shell{width:calc(100% - 20px);padding-top:26px}.timeline-heading,.history{padding-inline:15px}.timeline-nav{grid-template-columns:92px minmax(0,1fr)}.progress-wrap{grid-column:1/-1;grid-row:1}.nav-action{width:100%;height:70px}.rating{grid-template-columns:minmax(0,1fr) 62px 62px}.rating span{grid-column:1/-1}.workspace{grid-template-rows:420px 190px}.code-view{font-size:11.5px}.code-line{min-width:480px}.history summary{grid-template-columns:30px minmax(0,1fr) 14px}.commit-location{display:none}.geek-toggle{top:96px;writing-mode:horizontal-tb}.geek-drawer{width:100%;border-left:0}.geek-drawer-header,.geek-drawer-body{padding:18px 16px}html.geek-mode .geek-toggle{right:0}}
 </style>
 </head>
 <body>
@@ -94,6 +99,12 @@ button:focus-visible{outline:3px solid rgba(0,116,128,.35);outline-offset:2px}
 document.addEventListener("DOMContentLoaded",()=>{
   const INITIAL_CONTEXT_LINES=5,CONTEXT_INCREMENT=5;
   const payload=JSON.parse(document.getElementById("timeline-data").textContent);
+  const controllers=[];
+  let geekMode=false;
+  const geekToggle=document.querySelector("[data-geek-toggle]");
+  const geekDrawer=document.querySelector("[data-geek-drawer]");
+  const geekContent=document.querySelector("[data-geek-content]");
+  let geekStep=null;
   const escapeHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const highlight=value=>window.Prism?.languages?.scala?Prism.highlight(value,Prism.languages.scala,"scala"):escapeHtml(value);
   const rating=(id,prompt)=>`<div class="rating" data-feedback-id="${escapeHtml(id)}"><span>${prompt}</span><button type="button" data-rating="positive" aria-keyshortcuts="ArrowUp">Yes (↑)</button><button type="button" data-rating="negative" aria-keyshortcuts="ArrowDown">No (↓)</button></div>`;
@@ -111,8 +122,19 @@ document.addEventListener("DOMContentLoaded",()=>{
     step.after.split("\n").forEach(line=>rows.push(`<tr class="add"><td>+</td><td>${escapeHtml(line)||" "}</td></tr>`));
     return `<table class="diff-table"><tbody>${rows.join("")}</tbody></table>`;
   };
+  function renderGeek(step){
+    geekStep=step||null;
+    if(!geekContent)return;
+    if(!geekStep){
+      geekContent.innerHTML='<p class="geek-empty">Choose an improvement or observation to inspect the pattern that matched it.</p>';
+      return;
+    }
+    const rewrite=geekStep.kind==="rewrite"?`<span class="eyebrow">Rewrite</span><pre><code class="language-scala">${highlight(geekStep.rewrite||"Rewrite template unavailable for this report.")}</code></pre>`:"";
+    geekContent.innerHTML=`<article class="geek-rule"><span class="eyebrow">Pattern</span><pre><code class="language-scala">${highlight(geekStep.pattern||"Pattern unavailable for this report.")}</code></pre>${rewrite}</article>`;
+  }
   document.querySelectorAll(".timeline").forEach(timeline=>{
-    const history=payload.histories[Number(timeline.dataset.historyIndex)];
+    const timelineIndex=Number(timeline.dataset.historyIndex);
+    const history=payload.histories[timelineIndex];
     const code=timeline.querySelector("[data-code]");
     const codeView=code.closest(".code-view");
     const card=timeline.querySelector("[data-change-card]");
@@ -131,14 +153,14 @@ document.addEventListener("DOMContentLoaded",()=>{
       return step?.kind==="rewrite"?`${step.id}-${preview?"highlight":"result"}`:step?.id;
     }
     const hasRating=id=>window.lorikeetFeedback?.hasRating(id)===true;
-    const stepRated=step=>step.kind==="rewrite"?hasRating(step.id+"-highlight")&&hasRating(step.id+"-result"):hasRating(step.id);
+    const stepRated=step=>step.kind==="rewrite"?hasRating(step.id+"-result"):hasRating(step.id);
     function announceView(){const id=feedbackId();if(id)timeline.dispatchEvent(new CustomEvent("timelinechange",{bubbles:true,detail:{id}}))}
     function renderDots(){
       let unlocked=true;
       const activeIndex=preview?current:current-1;
       history.steps.forEach((item,index)=>{
         const dot=dots.children[index],marker=dot.firstElementChild;
-        const state=index<activeIndex?"complete":index===activeIndex?(preview||item.kind==="observation"?"highlight":"rewritten"):unlocked?"open":"locked";
+        const state=index<activeIndex?"complete":index===activeIndex?(preview||item.kind==="observation"?"highlight":"improved"):unlocked?"open":"locked";
         dot.className=state;
         if(index>0)dots.children[index-1].classList.toggle("line-colored",index<=activeIndex);
         marker.className=`step-marker ${state}`;
@@ -188,7 +210,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     function renderHistory(){
       const entries=history.steps.slice(0,current).map((step,index)=>({step,index})).reverse();
       historyPanel.hidden=!entries.length;
-      list.innerHTML=entries.map(({step,index},position)=>`<li><details class="${position?"":"current"}" data-history-step="${index}" ${position?"":"open"}><summary><span class="commit-dot">${index+1}</span><span><span class="commit-title">${escapeHtml(step.title)}</span><br><span class="commit-location">${step.kind==="observation"?`Observation · ${step.locations?.length||1} location(s)`:"Rewrite · line "+step.line+":"+step.column}</span></span><span aria-hidden="true">⌄</span></summary>${diffRows(step)}</details></li>`).join("");
+      list.innerHTML=entries.map(({step,index},position)=>`<li><details class="${position?"":"current"}" data-history-step="${index}" ${position?"":"open"}><summary><span class="commit-dot">${index+1}</span><span><span class="commit-title">${escapeHtml(step.title)}</span><br><span class="commit-location">${step.kind==="observation"?`Observation · ${step.locations?.length||1} location(s)`:"Improvement · line "+step.line+":"+step.column}</span></span><span aria-hidden="true">⌄</span></summary>${diffRows(step)}</details></li>`).join("");
     }
     function render(forceFocus=false){
       const value=currentCode();
@@ -196,23 +218,34 @@ document.addEventListener("DOMContentLoaded",()=>{
       const ordinal=step?history.steps.slice(0,current+(preview?1:0)).filter(item=>item.kind===step.kind).length:0;
       const range=currentRange(),window=codeWindow(value,range);
       renderCode(value,window,step?range:null,forceFocus);
-      timeline.querySelector("[data-version-label]").textContent=preview?`Before rewrite ${ordinal}`:step?.kind==="observation"?`Final code · observation ${ordinal}`:step?`After rewrite ${ordinal}`:"Original";
+      timeline.querySelector("[data-version-label]").textContent=preview?`Before improvement ${ordinal}`:step?.kind==="observation"?`Final code · observation ${ordinal}`:step?`After improvement ${ordinal}`:"Original";
       timeline.querySelector("[data-progress-label]").textContent=`${current+(preview?1:0)} / ${history.steps.length}`;
       back.disabled=!preview&&current===0;
       forward.disabled=!preview&&current===history.steps.length;
-      forward.textContent=preview?"Show rewritten code (→)":current===history.steps.length?"Complete":"Next feedback (→)";
-      const needsRating=!!step&&!hasRating(feedbackId());
+      forward.textContent=preview?"Show improved code (→)":current===history.steps.length?"Complete":"Next feedback (→)";
+      const needsRating=!!step&&!preview&&!hasRating(feedbackId());
       forward.hidden=needsRating;
       ratingSlot.hidden=!needsRating;
-      ratingSlot.innerHTML=needsRating?rating(feedbackId(),preview||step.kind==="observation"?"I see what the issue is":"This was useful"):"";
+      ratingSlot.innerHTML=needsRating?rating(feedbackId(),"This was useful"):"";
       const locations=step?.kind==="observation"?step.locations||[]:[];
       const occurrenceButtons=locations.length>1?`<div class="occurrences" aria-label="Observation locations">${locations.map((item,index)=>`<button type="button" data-occurrence="${index}" aria-pressed="${index===occurrence}">Line ${item.line}:${item.column}</button>`).join("")}</div>`:"";
-      card.innerHTML=step?`<span class="eyebrow">${step.kind==="observation"?"Observation":"Rewrite"} ${ordinal} / ${history.steps.length}</span><h3>${escapeHtml(step.title)}</h3><span class="location">${locations.length>1?` · ${locations.length} matches`:""}</span>${step.explanation?`<p>${escapeHtml(step.explanation)}</p>`:""}${occurrenceButtons}`:`<span class="eyebrow">Starting point</span><h3>Your code, slightly formatted.</h3>`;
+      const location=step?.location?`<p class="location">Location: ${escapeHtml(step.location)}${locations.length>1?` · ${locations.length} matches`:""}</p>`:"";
+      card.innerHTML=step?`<span class="eyebrow">${step.kind==="observation"?"Observation":"Improvement"} ${ordinal} / ${history.steps.length}</span><h3>${escapeHtml(step.title)}</h3>${location}${step.explanation?`<p>${escapeHtml(step.explanation)}</p>`:""}${occurrenceButtons}`:`<span class="eyebrow">Starting point</span><h3>Your code (slightly formatted).</h3>`;
+      renderGeek(step);
       renderDots();
       renderHistory();
     }
+    function breadcrumb(){return {timelineIndex,current,preview,occurrence}}
+    function restore(state){
+      current=Math.max(0,Math.min(Number(state.current)||0,history.steps.length));
+      preview=Boolean(state.preview)&&current<history.steps.length&&history.steps[current].kind==="rewrite";
+      const locations=activeStep()?.locations||[];
+      occurrence=Math.max(0,Math.min(Number(state.occurrence)||0,Math.max(0,locations.length-1)));
+      resetContext();render(true);announceView();
+    }
+    controllers[timelineIndex]={breadcrumb,restore,render};
     forward.addEventListener("click",()=>{
-      if((!preview&&current===history.steps.length)||(feedbackId()&&!hasRating(feedbackId())))return;
+      if((!preview&&current===history.steps.length)||(!preview&&feedbackId()&&!hasRating(feedbackId())))return;
       resetContext();occurrence=0;
       if(preview){current++;preview=false}
       else {
@@ -220,21 +253,18 @@ document.addEventListener("DOMContentLoaded",()=>{
         if(next.kind==="observation")current++;
         else preview=true;
       }
-      render(true);announceView();
+      render(true);announceView();recordBreadcrumb(timelineIndex);
     });
     back.addEventListener("click",()=>{
       if(!preview&&current===0)return;
-      resetContext();occurrence=0;
-      if(preview)preview=false;
-      else {current--;preview=history.steps[current].kind==="rewrite"}
-      render(true);announceView();
+      window.history.back();
     });
     timeline.addEventListener("feedbackrated",event=>{if(event.detail.id===feedbackId())render()});
     card.addEventListener("click",event=>{
       const button=event.target.closest("[data-occurrence]");
       if(!button)return;
       occurrence=Number(button.dataset.occurrence);
-      resetContext();render(true);
+      resetContext();render(true);recordBreadcrumb(timelineIndex);
     });
     codeView.addEventListener("click",event=>{
       const button=event.target.closest("[data-expand-before],[data-expand-after]");
@@ -245,11 +275,50 @@ document.addEventListener("DOMContentLoaded",()=>{
     });
     render();
   });
+  const breadcrumbUrl=state=>`#feedback-${state.timelineIndex}-${state.current}-${state.preview?"before":"after"}`;
+  const breadcrumbs=()=>controllers.map(controller=>controller.breadcrumb());
+  const historyState=state=>Object.assign({},window.history.state||{},{lorikeetFeedback:state});
+  function recordBreadcrumb(activeIndex){
+    const state=breadcrumbs();
+    window.history.pushState(historyState(state),"",breadcrumbUrl(state[activeIndex]));
+  }
+  function restoreBreadcrumb(state){
+    if(!Array.isArray(state))return false;
+    state.forEach(item=>controllers[item?.timelineIndex]?.restore(item));
+    return true;
+  }
+  function hashBreadcrumb(){
+    const match=/^#feedback-(\d+)-(\d+)-(before|after)$/.exec(location.hash);
+    return match&&{timelineIndex:Number(match[1]),current:Number(match[2]),preview:match[3]==="before",occurrence:0};
+  }
+  const linkedBreadcrumb=hashBreadcrumb();
+  if(!restoreBreadcrumb(window.history.state?.lorikeetFeedback)&&linkedBreadcrumb)
+    controllers[linkedBreadcrumb.timelineIndex]?.restore(linkedBreadcrumb);
+  window.history.replaceState(historyState(breadcrumbs()),"",location.href);
+  window.addEventListener("popstate",event=>{
+    if(!restoreBreadcrumb(event.state?.lorikeetFeedback)){
+      const target=hashBreadcrumb();
+      if(target)controllers[target.timelineIndex]?.restore(target);
+    }
+  });
+  function setGeekMode(enabled){
+    geekMode=enabled;
+    document.documentElement.classList.toggle("geek-mode",enabled);
+    geekDrawer?.classList.toggle("is-open",enabled);
+    geekDrawer?.setAttribute("aria-hidden",String(!enabled));
+    if(geekDrawer)geekDrawer.inert=!enabled;
+    geekToggle?.setAttribute("aria-expanded",String(enabled));
+    if(enabled)renderGeek();
+    document.dispatchEvent(new CustomEvent("geekmodechange",{detail:{enabled}}));
+  }
+  geekToggle?.addEventListener("click",()=>setGeekMode(!geekMode));
   document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&geekMode){event.preventDefault();setGeekMode(false);return}
     if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
-    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key))return;
     const target=event.target;
     if(target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement||target instanceof HTMLSelectElement||target?.isContentEditable)return;
+    if(event.key.toLowerCase()==="g"){event.preventDefault();setGeekMode(!geekMode);return}
+    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key))return;
     const timeline=shortcutTimeline();
     const selector={ArrowLeft:"[data-back]",ArrowRight:"[data-forward]",ArrowUp:'[data-rating="positive"]',ArrowDown:'[data-rating="negative"]'}[event.key];
     const button=timeline?.querySelector(selector);

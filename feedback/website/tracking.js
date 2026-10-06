@@ -55,6 +55,7 @@
     persist({event,synced:false});void flush();
   }
   document.addEventListener('timelinechange', event=>record('feedback_view',event.detail.id));
+  document.addEventListener('geekmodechange', event=>record(event.detail.enabled?'geek_mode_enabled':'geek_mode_disabled','geek-mode'));
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-rating]');if(!button)return;
     const id=button.closest('[data-feedback-id]')?.dataset.feedbackId;if(!id)return;
@@ -62,7 +63,7 @@
     record('feedback_rating',id,button.dataset.rating);
     button.dispatchEvent(new CustomEvent('feedbackrated',{bubbles:true,detail:{id}}));
   });
-  Object.keys(report.issues).forEach(id=>record('issue_loaded',id));
+  Object.keys(report.issues).filter(id=>id!=='geek-mode').forEach(id=>record('issue_loaded',id));
   window.addEventListener('online',flush);
   window.addEventListener('pagehide',flush);
   setInterval(flush,5000);

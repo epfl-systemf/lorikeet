@@ -96,6 +96,7 @@ object Config:
       CustomRule(
         rule.name,
         matchTree,
+        rule.pattern,
         rewriteTree,
         rule.rewrite,
         matchOptions,
@@ -115,6 +116,7 @@ object Config:
       TokenRule(
         rule.name,
         pattern,
+        rule.pattern,
         rule.rewrite,
         rule.onlyPackages,
         rule.targetKind.map { kind =>

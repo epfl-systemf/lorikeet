@@ -6,5 +6,5 @@ libraryDependencies += "org.scalameta" %% "munit" % "1.1.1" % Test
 
 semanticdbEnabled := true
 semanticdbVersion := scalafixSemanticdb.revision
-scalafixDependencies += "ch.epfl.systemf" % "lorikeet_3" % "0.1.0"
+scalafixDependencies += "ch.epfl.systemf" % "lorikeet_3" % "0.1.0-local"
 scalafixCaching := false

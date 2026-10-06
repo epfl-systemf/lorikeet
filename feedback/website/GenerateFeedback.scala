@@ -70,16 +70,17 @@ object GenerateFeedback:
     val header =
       s"""|<header class="page-header">
           |  <p>
-          |    Hi! We, the people of the <a href="https://cs-214.epfl.ch/">CS-214</a> course staff and the <a href="https://systemf.epfl.ch/">SYSTEMF</a>, have been developing a new experimental way for giving you more personalized <b>Code Quality Feedback</b>. As usual, you can find code quality tips in the <a href="https://cs-214.epfl.ch/#debriefs">Debriefs</a>. This page offers some interactive suggestions, specifically for you! You can find your submitted code in the snippet below. (Yes, we do look at it!) You can use the buttons below to see your code transform!
+          |    Hi! We, the people of the <a href="https://cs-214.epfl.ch/">CS-214</a> course staff and the <a href="https://systemf.epfl.ch/">SYSTEMF</a>, have been developing a new way for giving you more personalized <b>Code Quality Feedback</b> based on <a href="https://2026.workshop.scala-lang.org/details?action-call-with-get-request-type=1&267096026d554f5586cbd6bc17aac1beaction_17426506610766a4ea791250b9c1f85e4c0391f5045=1&__ajax_runtime_request__=1&context=scala-2026&track=scala-2026&urlKey=3&decoTitle=Lorikeet-Flexible-code-rewriting-for-Scala-3">Lorikeet</a>. As usual, you can find code quality tips in the <a href="https://cs-214.epfl.ch/#debriefs">Debriefs</a>. This page offers some interactive suggestions, specifically for you! You can find your submitted code in the snippet below. (Yes, we do look at it!) You can use the buttons below to see your code transform!
           |  </p>
-          |  <p>
-          |    Small disclaimer: This is an experimental research project, so beware. There might be some mistakes (and code-style opinions ^^), don't take everything blindly. If you spot any mistakes, you can report them <a href="https://github.com/epfl-systemf/lorikeet/issues/new">here</a>.
-          |  </p>
+          |  <aside class="disclaimer">
+          |    <span class="eyebrow">Disclaimer</span>
+          |    <p>This is an experimental research project, so beware. There might be some mistakes (and code-style opinions ^^), don't take everything blindly. If you spot any mistakes, you can report them <a href="https://github.com/epfl-systemf/lorikeet/issues/new">HERE</a>.</p>
+          |  </aside>
           |</header>""".stripMargin
     val failure = result.status match
       case "missing_files" => Some("We couldn't process your submission: a required file was missing.")
       case "compile_error" => Some("We couldn't process your submission: it did not compile.")
-      case "rewrite_error" => Some("We couldn't process your submission: the rewritten code did not compile.")
+      case "rewrite_error" => Some("We couldn't process your submission: the improved code did not compile.")
       case "processing_error" => Some("We couldn't process your submission: a processing error occurred.")
       case "issues" | "success" => None
       case other => throw IllegalArgumentException("Unknown result status: " + other)
@@ -158,7 +159,7 @@ object GenerateFeedback:
           step("column").num.toInt
         )
         feedbackItems(id + "-highlight") = item.copy(rule = item.rule + " (highlight)")
-        feedbackItems(id + "-result") = item.copy(rule = item.rule + " (rewritten code)")
+        feedbackItems(id + "-result") = item.copy(rule = item.rule + " (improved code)")
       }
     }
 
@@ -188,6 +189,8 @@ object GenerateFeedback:
           "id" -> id,
           "rule" -> rule,
           "description" -> first("description").str,
+          "pattern" -> first.obj.get("pattern").fold("")(_.str),
+          "rewrite" -> first.obj.get("rewrite").fold("")(_.str),
           "title" -> rule,
           "explanation" -> first("description").str,
           "location" -> s"$file:$line:$column",
@@ -216,7 +219,7 @@ object GenerateFeedback:
       val steps = history("steps").arr
       val warning =
         if history.value.get("truncated").exists(_.bool) then
-          s"<p class=\"limit-warning\">The rewrite limit of ${history("limit").num.toInt} was reached; more patterns may still match.</p>"
+          s"<p class=\"limit-warning\">The maximum number of improvements (${history("limit").num.toInt}) was reached; more patterns may still match.</p>"
         else ""
       s"""|<section class="timeline" data-history-index="$index">
           |  <div class="workspace">
@@ -230,6 +233,11 @@ object GenerateFeedback:
           |      </div>
           |      <div class="code-view"><table class="code-table" role="presentation">
           |        <tbody data-code></tbody></table>
+          |      </div>
+          |      <div class="code-footer">
+          |        <span>
+          |          Made with ❤️ by SYSTEMF and CS-214 staff
+          |        </span>
           |      </div>
           |    </div>
           |    <aside class="change-card" data-change-card></aside>
@@ -246,13 +254,18 @@ object GenerateFeedback:
           |  </section>$warning
           |</section>""".stripMargin
     }.mkString
+    val geekControls =
+      if visibleHistories.nonEmpty then
+        """|<button type="button" class="secondary geek-toggle" data-geek-toggle aria-controls="geek-drawer" aria-expanded="false" aria-keyshortcuts="G" title="Toggle Geek mode (G)">Geek mode (G)</button>
+           |<aside id="geek-drawer" class="geek-drawer" data-geek-drawer aria-label="Rule templates" aria-hidden="true" inert><header class="geek-drawer-header"><div><span class="eyebrow">Geek mode</span></div></header><div class="geek-drawer-body"><p class="geek-drawer-intro">In Geek Mode you can peek into the patterns and rewrite rules that were used to improve your code. Our tool matches your code against the PATTERN and replaces it with the REWRITE.</p><div class="geek-drawer-content" data-geek-content></div></div></aside>""".stripMargin
+      else ""
     val empty =
       if visibleHistories.nonEmpty then ""
       else
         "<section class=\"empty-state\"><h2>No feedback</h2><p>We didn't match any code-quality improvement patterns on your submission. Until next time.</p></section>"
     val title = submission
     val main =
-      s"""<main class="shell">$header$timelines$empty</main>"""
+      s"""<main class="shell">$header$geekControls$timelines$empty</main>"""
     val metadataIssues = mutable.LinkedHashMap.empty[String, ujson.Value]
     feedbackItems.foreach { (id, item) =>
       metadataIssues(id) = ujson.Obj(
@@ -265,6 +278,13 @@ object GenerateFeedback:
         "column" -> item.column
       )
     }
+    metadataIssues("geek-mode") = ujson.Obj(
+      "id" -> "geek-mode",
+      "rule" -> "Geek mode",
+      "file" -> "Feedback report",
+      "line" -> 1,
+      "column" -> 1
+    )
     val metadata = ujson.Obj(
       "report_id" -> publicId.getOrElse(filename.stripSuffix(".html")),
       "submission" -> submission,

@@ -24,6 +24,8 @@ class GenerateFeedbackTest extends munit.FunSuite:
       "steps" -> ujson.Arr(ujson.Obj(
         "rule" -> "Rewrite",
         "description" -> "rewrite it",
+        "pattern" -> "val `?name` = `?value`",
+        "rewrite" -> "val `?name` = `?value` + 1",
         "start" -> start,
         "end" -> (start + before.length),
         "line" -> 10,
@@ -36,6 +38,7 @@ class GenerateFeedbackTest extends munit.FunSuite:
         ujson.Obj(
           "rule" -> "Var Usage",
           "description" -> "avoid mutation",
+          "pattern" -> "var `?name` = `?value`",
           "start" -> 0,
           "end" -> 3,
           "line" -> 1,
@@ -45,6 +48,7 @@ class GenerateFeedbackTest extends munit.FunSuite:
         ujson.Obj(
           "rule" -> "Var Usage",
           "description" -> "avoid mutation",
+          "pattern" -> "var `?name` = `?value`",
           "start" -> rewritten.indexOf("val line40"),
           "end" -> (rewritten.indexOf("val line40") + 3),
           "line" -> 40,
@@ -62,6 +66,7 @@ class GenerateFeedbackTest extends munit.FunSuite:
       "steps" -> ujson.Arr(ujson.Obj(
         "rule" -> "Second Rewrite",
         "description" -> "replace zero",
+        "pattern" -> "0",
         "start" -> 13,
         "end" -> 14,
         "line" -> 1,
@@ -73,6 +78,7 @@ class GenerateFeedbackTest extends munit.FunSuite:
       "lints" -> ujson.Arr(ujson.Obj(
         "rule" -> "Var Usage",
         "description" -> "avoid mutation",
+        "pattern" -> "var `?name` = `?value`",
         "start" -> 0,
         "end" -> 3,
         "line" -> 1,
@@ -164,6 +170,8 @@ class GenerateFeedbackTest extends munit.FunSuite:
     assertEquals(steps(1)("locations").arr.size, 2)
     assertEquals(steps(1)("locations")(1)("line").num.toInt, 40)
     assertEquals(steps(0)("explanation").str, "rewrite it")
+    assertEquals(steps(0)("pattern").str, "val `?name` = `?value`")
+    assertEquals(steps(0)("rewrite").str, "val `?name` = `?value` + 1")
     assertEquals(steps(1)("explanation").str, "avoid mutation")
     assertEquals(steps(0)("code").str, rewritten)
     assert(steps(0)("before").str.linesIterator.size > 5)
@@ -175,14 +183,44 @@ class GenerateFeedbackTest extends munit.FunSuite:
     assert(html.contains("let current=0,preview=false"))
     assert(html.contains("data-step-dots"))
     assert(html.contains("data-rating-slot"))
+    assert(html.contains("data-geek-toggle"))
+    assert(html.contains("data-geek-drawer"))
+    assert(!html.contains("data-geek-close"))
+    assert(html.contains("data-geek-content"))
+    assert(html.contains("class=\"geek-drawer-body\""))
+    assert(html.contains("class=\"geek-drawer-intro\""))
+    assert(html.contains("Our tool matches your code against the PATTERN and replaces it with the REWRITE."))
+    assert(html.contains("class=\"geek-drawer\""))
+    assert(html.contains("aria-hidden=\"true\" inert"))
+    assert(html.contains("Geek mode (G)"))
+    assert(html.contains("aria-keyshortcuts=\"G\""))
+    assert(html.contains("history.pushState"))
+    assert(html.contains("window.history.back()"))
+    assert(html.contains("window.addEventListener(\"popstate"))
+    assert(html.contains("resetContext();render(true);announceView();"))
+    assert(html.contains("document.addEventListener('timelinechange'"))
+    assert(html.contains("document.documentElement.classList.toggle(\"geek-mode\",enabled)"))
+    assert(html.contains("event.key===\"Escape\"&&geekMode"))
+    assert(html.contains("event.key.toLowerCase()===\"g\""))
+    assert(html.contains("geekmodechange"))
+    assert(html.contains("geek_mode_enabled"))
+    assert(html.contains("geekStep=step||null;"))
+    assert(html.contains("renderGeek(step);"))
+    assert(html.contains("grid-template-rows:auto minmax(0,1fr) auto"))
+    assert(html.contains("text-decoration-style:dashed"))
+    assert(html.contains("<aside class=\"disclaimer\">"))
+    assert(html.contains("const needsRating=!!step&&!preview&&!hasRating(feedbackId());"))
+    assert(html.contains("flex:1 0 48px"))
+    assert(html.contains("scrollbar-gutter:stable"))
     val logPayload = ujson.read(
       "(?s)<script type=\"application/json\" id=\"feedback-log-data\">(.*?)</script>".r
         .findFirstMatchIn(html).get.group(1)
     )
     assert(Set("rewrite-0-highlight", "rewrite-0-result", "observation-0")
       .subsetOf(logPayload("issues").obj.keySet.toSet))
+    assertEquals(logPayload("issues")("geek-mode")("rule").str, "Geek mode")
     assertEquals(logPayload("issues")("rewrite-0-highlight")("rule").str, "Rewrite (highlight)")
-    assertEquals(logPayload("issues")("rewrite-0-result")("rule").str, "Rewrite (rewritten code)")
+    assertEquals(logPayload("issues")("rewrite-0-result")("rule").str, "Rewrite (improved code)")
     assert(!html.contains("HIGHLIGHT_MS"))
     assert(html.contains("--accent:var(--color-rouge)"))
     assert(html.contains("width:min(1480px"))
@@ -192,7 +230,7 @@ class GenerateFeedbackTest extends munit.FunSuite:
     assert(localPage("student-1").contains("We didn't match any code-quality improvement patterns"))
     assert(localPage("student-2").contains("a required file was missing"))
     assert(localPage("student-3").contains("it did not compile"))
-    assert(localPage("student-4").contains("the rewritten code did not compile"))
+    assert(localPage("student-4").contains("the improved code did not compile"))
     assert(localPage("student-5").contains("a processing error occurred"))
 
     val publishConfig = config.copy(
@@ -265,10 +303,30 @@ class GenerateFeedbackTest extends munit.FunSuite:
       assertEquals(duplicate.statusCode(), 200, duplicate.body())
       val replay = client.send(request, HttpResponse.BodyHandlers.ofString())
       assertEquals(replay.statusCode(), 200, replay.body())
+      val geekEvent = event.copy()
+      geekEvent("event_id") = UUID.randomUUID().toString
+      geekEvent("event_type") = "geek_mode_enabled"
+      geekEvent("issue") = ujson.Obj(
+        "id" -> "geek-mode",
+        "rule" -> "Geek mode",
+        "file" -> "Feedback report",
+        "line" -> 1,
+        "column" -> 1
+      )
+      val geekRequest = HttpRequest
+        .newBuilder(URI.create(base + "/api/log-events"))
+        .header("Content-Type", "application/json")
+        .header("Origin", base)
+        .header("X-Log-Token", token)
+        .POST(HttpRequest.BodyPublishers.ofString(geekEvent.render()))
+        .build()
+      assertEquals(client.send(geekRequest, HttpResponse.BodyHandlers.ofString()).statusCode(), 200)
       val events = get("/api/logs/events")
       assertEquals(events.statusCode(), 200, events.body())
+      assert(events.body().contains("geek_mode_enabled"))
       val summary = get("/api/logs/summary")
       assertEquals(summary.statusCode(), 200)
       assert(summary.body().contains("student-0"))
+      assert(!summary.body().contains("Geek mode"))
     finally running.close()
   }

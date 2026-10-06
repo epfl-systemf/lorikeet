@@ -93,7 +93,7 @@ The included `find` scaffold pins Lorikeet `0.1.0`. Before grading with it, publ
 
 ```bash
 cd lorikeet
-sbt 'set ThisBuild / version := "0.1.0"' 'rules3/publishLocal'
+sbt 'set ThisBuild / version := "0.1.0-local"' 'rules3/publishLocal'
 cd ..
 ```
 

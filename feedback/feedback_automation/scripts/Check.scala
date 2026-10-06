@@ -2,13 +2,13 @@
 //> using dep com.lihaoyi::ujson:4.4.3
 
 // --- CONFIGURATION ---
-// val SCAFFOLD_DIR = "scaffold_projects/find"
-// val SUBMISSIONS_DIR = "student-lab-submissions/test/find"
-// val TARGET_FILES = Seq("src/main/scala/find/find.scala")
+val SCAFFOLD_DIR = "scaffold_projects/find"
+val SUBMISSIONS_DIR = "student-lab-submissions/test/find"
+val TARGET_FILES = Seq("src/main/scala/find/find.scala")
 
-val SCAFFOLD_DIR = "scaffold_projects/boids"
-val SUBMISSIONS_DIR = "student-lab-submissions/2026/boids"
-val TARGET_FILES = Seq("src/main/scala/boids/BoidLogic.scala")
+// val SCAFFOLD_DIR = "scaffold_projects/boids"
+// val SUBMISSIONS_DIR = "student-lab-submissions/2026/boids"
+// val TARGET_FILES = Seq("src/main/scala/boids/BoidLogic.scala")
 
 // val SCAFFOLD_DIR = "scaffold_projects/boids"
 // val SUBMISSIONS_DIR = "student-lab-submissions/2024/boids/submissions"

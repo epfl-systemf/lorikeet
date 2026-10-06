@@ -23,6 +23,7 @@ case class MatchOptions(
 case class CustomRule(
     name: String,
     pattern: Tree,
+    patternSource: String,
     rewrite: Option[Tree],
     rewriteSource: Option[String],
     matchOptions: MatchOptions,
@@ -33,6 +34,7 @@ case class CustomRule(
 case class TokenRule(
     name: String,
     pattern: Regex,
+    patternSource: String,
     rewrite: Option[String],
     onlyPackages: Option[List[String]],
     targetKind: Option[String],
@@ -56,6 +58,8 @@ object LorikeetEngine:
   private case class RewriteStep(
       ruleName: String,
       description: Option[String],
+      pattern: String,
+      rewrite: String,
       ruleOrder: Int,
       candidateOrder: Int,
       start: Int,
@@ -70,6 +74,7 @@ object LorikeetEngine:
   private case class FinalLint(
       rule: String,
       description: String,
+      pattern: String,
       start: Int,
       end: Int,
       line: Int,
@@ -236,6 +241,7 @@ object LorikeetEngine:
         def record(
             rule: String,
             description: Option[String],
+            pattern: String,
             start: Int,
             end: Int
         ): FinalLint =
@@ -244,6 +250,7 @@ object LorikeetEngine:
           FinalLint(
             rule,
             description.getOrElse(""),
+            pattern,
             start,
             end,
             line,
@@ -263,6 +270,7 @@ object LorikeetEngine:
                 record(
                   rule.name,
                   rule.description,
+                  rule.patternSource,
                   candidate.pos.start,
                   candidate.pos.end
                 )
@@ -272,7 +280,7 @@ object LorikeetEngine:
           .filter(rule => rule.rewrite.isEmpty || lintLevel == LintLevel.Full)
           .flatMap(rule =>
             tokenMatches(rule, code, tree).map { case (start, end, _, _) =>
-              record(rule.name, rule.description, start, end)
+              record(rule.name, rule.description, rule.patternSource, start, end)
             }
           )
         (treeLints ++ tokenLints)
@@ -604,6 +612,8 @@ object LorikeetEngine:
                         RewriteStep(
                           rule.name,
                           rule.description,
+                          rule.patternSource,
+                          rule.rewriteSource.getOrElse(""),
                           ruleOrder,
                           candidateOrder,
                           start,
@@ -629,6 +639,8 @@ object LorikeetEngine:
                   RewriteStep(
                     rule.name,
                     rule.description,
+                    rule.patternSource,
+                    replacement,
                     ruleTrees.size + index,
                     candidateOrder,
                     start,
@@ -735,7 +747,7 @@ object LorikeetEngine:
             .map { step =>
               s"""{"rule":${json(step.ruleName)},"description":${json(
                   step.description.getOrElse("")
-                )},"start":${step.start},"end":${step.end},"line":${step.line},"column":${step.column},"before":${json(
+                )},"pattern":${json(step.pattern)},"rewrite":${json(step.rewrite)},"start":${step.start},"end":${step.end},"line":${step.line},"column":${step.column},"before":${json(
                   step.before
                 )},"after":${json(step.after)},"code":${json(step.code)}}"""
             }
@@ -743,7 +755,7 @@ object LorikeetEngine:
             .map { lint =>
               s"""{"rule":${json(lint.rule)},"description":${json(
                   lint.description
-                )},"start":${lint.start},"end":${lint.end},"line":${lint.line},"column":${lint.column},"code":${json(lint.code)}}"""
+                )},"pattern":${json(lint.pattern)},"start":${lint.start},"end":${lint.end},"line":${lint.line},"column":${lint.column},"code":${json(lint.code)}}"""
             }
             .mkString(",")}]}
            |""".stripMargin
